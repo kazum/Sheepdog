@@ -22,7 +22,10 @@ static char stale_dir[PATH_MAX];
 
 static int get_open_flags(uint64_t oid, bool create, int fl)
 {
-	int flags = O_DSYNC | O_RDWR;
+	int flags = O_RDWR;
+
+	if (!sys->no_sync)
+		flags |= O_DSYNC;
 
 	if ((fl & SD_FLAG_CMD_CACHE && is_disk_cache_enabled()) ||
 	    uatomic_is_true(&sys->use_journal))

@@ -49,6 +49,7 @@ static struct sd_option sheep_options[] = {
 	{'h', "help", false, "display this help and exit"},
 	{'j', "journal", true, "use jouranl file to log all the write operations"},
 	{'l', "loglevel", true, "specify the level of logging detail"},
+	{'n', "nosync", false, "write objects without a sync flag"},
 	{'o', "stdout", false, "log to stdout instead of shared logger"},
 	{'p', "port", true, "specify the TCP port on which to listen"},
 	{'P', "pidfile", true, "create a pid file"},
@@ -408,6 +409,9 @@ int main(int argc, char **argv)
 				sdlog_help();
 				exit(1);
 			}
+			break;
+		case 'n':
+			sys->no_sync = true;
 			break;
 		case 'y':
 			af = strstr(optarg, ":") ? AF_INET6 : AF_INET;
