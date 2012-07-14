@@ -864,6 +864,89 @@ static int vdi_object(int argc, char **argv)
 	return EXIT_SUCCESS;
 }
 
+static int vdi_objmap(int argc, char **argv)
+{
+	char *data = argv[optind];
+	int ret, i, idx, max_idx = 0;
+	struct sd_req hdr;
+	struct sd_rsp *rsp = (struct sd_rsp *)&hdr;
+	char vdiname[SD_MAX_VDI_LEN + SD_MAX_VDI_TAG_LEN];
+	uint64_t *buf = NULL;
+	uint8_t *objmap;
+	size_t nr_objs;
+	struct sd_node *e = sd_nodes;
+	uint32_t vid;
+
+	objmap = xzalloc(sizeof(*objmap) * MAX_DATA_OBJS);
+
+	ret = find_vdi_name(data, vdi_cmd_data.snapshot_id,
+			    vdi_cmd_data.snapshot_tag, &vid, 0);
+
+        for (i = 0; i < sd_nodes_nr; i++) {
+                int fd;
+                char name[256];
+
+                memset(&hdr, 0, sizeof(hdr));
+                snprintf(name, sizeof(name), "%d.%d.%d.%d",
+                         e[i].nid.addr[12],
+                         e[i].nid.addr[13],
+                         e[i].nid.addr[14],
+                         e[i].nid.addr[15]);
+
+                fd = connect_to(name, e[i].nid.port);
+		if (fd < 0)
+			return EXIT_SYSFAIL;
+
+		buf = xzalloc(SD_DATA_OBJ_SIZE);
+
+		sd_init_req(&hdr, SD_OP_GET_OBJ_LIST2);
+		hdr.epoch = sd_epoch;
+		hdr.obj.tgt_epoch = sd_epoch - 1;
+		hdr.data_length = SD_DATA_OBJ_SIZE;
+
+		ret = exec_req(fd, &hdr, buf);
+		close(fd);
+
+		if (ret) {
+			fprintf(stderr, "Failed to connect\n");
+			return EXIT_SYSFAIL;
+		}
+
+		if (rsp->result != SD_RES_SUCCESS) {
+			fprintf(stderr, "Failed to delete %s: %s\n", vdiname,
+				sd_strerror(rsp->result));
+			if (rsp->result == SD_RES_NO_VDI)
+				return EXIT_MISSING;
+			else
+				return EXIT_FAILURE;
+		}
+
+		nr_objs = hdr.data_length / sizeof(uint64_t);
+
+		for (idx = 0; idx < nr_objs; idx++) {
+			uint64_t mask = MAX_DATA_OBJS - 1;
+                        if (!is_data_obj(buf[idx]))
+                                continue;
+                        if (vid == (buf[idx] >> 32)) {
+                                objmap[buf[idx] & mask]++;
+                                if (max_idx < (buf[idx] & mask))
+                                        max_idx = buf[idx] & mask;
+                        }
+		}
+	}
+
+	for (i = 0; i <= max_idx; i++) {
+		if (objmap[i])
+			printf("%d", objmap[i]);
+		else
+			printf("-");
+	}
+
+	printf("\n");
+
+	return EXIT_SUCCESS;
+}
+
 static int do_track_object(uint64_t oid, uint8_t nr_copies)
 {
 	int i, j, fd, ret;
@@ -2005,6 +2088,9 @@ static struct subcommand vdi_cmd[] = {
 	{"cache", NULL, "saph", "Run 'collie vdi cache' for more information\n",
 	 vdi_cache_cmd, SUBCMD_FLAG_NEED_THIRD_ARG,
 	 vdi_cache, vdi_options},
+	{"objmap", "<vdiname>", "saph", "show object map information in the image",
+	 NULL, SUBCMD_FLAG_NEED_NODELIST|SUBCMD_FLAG_NEED_THIRD_ARG,
+	 vdi_objmap, vdi_options},
 	{NULL,},
 };
 
