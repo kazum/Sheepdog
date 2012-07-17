@@ -443,8 +443,10 @@ static int move_object_to_stale_dir(uint64_t oid, void *arg)
 
 static int check_stale_objects(uint64_t oid, void *arg)
 {
-	if (oid_stale(oid))
+	if (oid_stale(oid)) {
+		objlist_cache_remove_from_wd(oid);
 		return move_object_to_stale_dir(oid, arg);
+	}
 
 	return SD_RES_SUCCESS;
 }

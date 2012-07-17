@@ -295,6 +295,7 @@ int init_config_path(const char *base_path);
 int set_cluster_ctime(uint64_t ctime);
 uint64_t get_cluster_ctime(void);
 int get_obj_list(const struct sd_list_req *, struct sd_list_rsp *, void *);
+int get_obj_list2(const struct sd_list_req *, struct sd_list_rsp *, void *);
 int objlist_cache_cleanup(uint32_t vid);
 
 int start_recovery(struct vnode_info *cur_vinfo, struct vnode_info *old_vinfo);
@@ -318,6 +319,7 @@ int prealloc(int fd, uint32_t size);
 
 int objlist_cache_insert(uint64_t oid);
 void objlist_cache_remove(uint64_t oid);
+void objlist_cache_remove_from_wd(uint64_t oid);
 
 void put_request(struct request *req);
 

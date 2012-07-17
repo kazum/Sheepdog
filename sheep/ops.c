@@ -457,6 +457,12 @@ static int local_get_obj_list(struct request *req)
 			    (struct sd_list_rsp *)&req->rp, req->data);
 }
 
+static int local_get_obj_list2(struct request *req)
+{
+	return get_obj_list2((const struct sd_list_req *)&req->rq,
+			    (struct sd_list_rsp *)&req->rp, req->data);
+}
+
 static int local_get_epoch(struct request *req)
 {
 	uint32_t epoch = req->rq.obj.tgt_epoch;
@@ -1054,6 +1060,11 @@ static struct sd_op_template sd_ops[] = {
 		.name = "GET_OBJ_LIST",
 		.type = SD_OP_TYPE_LOCAL,
 		.process_work = local_get_obj_list,
+	},
+
+	[SD_OP_GET_OBJ_LIST2] = {
+		.type = SD_OP_TYPE_LOCAL,
+		.process_work = local_get_obj_list2,
 	},
 
 	[SD_OP_GET_EPOCH] = {
