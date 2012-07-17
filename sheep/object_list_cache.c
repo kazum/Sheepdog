@@ -25,13 +25,17 @@ struct objlist_cache_entry {
 	uint64_t oid;
 	struct list_head list;
 	struct rb_node node;
+	bool in_working_directory;
 };
 
 struct objlist_cache {
 	int tree_version;
 	int buf_version;
+	int wd_buf_version;
 	int cache_size;
+	int wd_cache_size;
 	uint64_t *buf;
+	uint64_t *wd_buf;
 	struct list_head entry_list;
 	struct rb_root root;
 	pthread_rwlock_t lock;
@@ -49,6 +53,28 @@ static struct objlist_cache obj_list_cache = {
 	.lock		= PTHREAD_RWLOCK_INITIALIZER,
 };
 
+static struct objlist_cache_entry *objlist_cache_rb_find(struct rb_root *root,
+							 uint64_t oid)
+{
+	struct rb_node **p = &root->rb_node;
+	struct rb_node *parent = NULL;
+	struct objlist_cache_entry *entry;
+
+	while (*p) {
+		parent = *p;
+		entry = rb_entry(parent, struct objlist_cache_entry, node);
+
+		if (oid < entry->oid)
+			p = &(*p)->rb_left;
+		else if (oid > entry->oid)
+			p = &(*p)->rb_right;
+		else
+			return entry;
+	}
+
+	return NULL; /* cannot found */
+}
+
 static struct objlist_cache_entry *objlist_cache_rb_insert(struct rb_root *root,
 		struct objlist_cache_entry *new)
 {
@@ -64,8 +90,11 @@ static struct objlist_cache_entry *objlist_cache_rb_insert(struct rb_root *root,
 			p = &(*p)->rb_left;
 		else if (new->oid > entry->oid)
 			p = &(*p)->rb_right;
-		else
+		else {
+			entry->in_working_directory = true;
+			obj_list_cache.tree_version++;
 			return entry; /* already has this entry */
+		}
 	}
 	rb_link_node(&new->node, parent, p);
 	rb_insert_color(&new->node, root);
@@ -108,6 +137,22 @@ void objlist_cache_remove(uint64_t oid)
 	pthread_rwlock_unlock(&obj_list_cache.lock);
 }
 
+/* mark that the entry is not in the working directory */
+void objlist_cache_remove_from_wd(uint64_t oid)
+{
+	struct objlist_cache_entry *entry;
+
+	pthread_rwlock_wrlock(&obj_list_cache.lock);
+	entry = objlist_cache_rb_find(&obj_list_cache.root, oid);
+	if (entry) {
+		entry->in_working_directory = false;
+		obj_list_cache.tree_version++;
+		sd_dprintf("remove oid from objlist %lx", oid);
+	} else
+		sd_eprintf("cannot find objlist entry, %lx", oid);
+	pthread_rwlock_unlock(&obj_list_cache.lock);
+}
+
 int objlist_cache_insert(uint64_t oid)
 {
 	struct objlist_cache_entry *entry, *p;
@@ -115,6 +160,7 @@ int objlist_cache_insert(uint64_t oid)
 	entry = xzalloc(sizeof(*entry));
 	entry->oid = oid;
 	rb_init_node(&entry->node);
+	entry->in_working_directory = true;
 
 	pthread_rwlock_wrlock(&obj_list_cache.lock);
 	p = objlist_cache_rb_insert(&obj_list_cache.root, entry);
@@ -163,6 +209,48 @@ out:
 
 	rsp->data_length = obj_list_cache.cache_size * sizeof(uint64_t);
 	memcpy(data, obj_list_cache.buf, rsp->data_length);
+	pthread_rwlock_unlock(&obj_list_cache.lock);
+	return SD_RES_SUCCESS;
+}
+
+int get_obj_list_for_demo(const struct sd_req *hdr, struct sd_rsp *rsp, void *data)
+{
+	int nr = 0;
+	struct objlist_cache_entry *entry;
+
+	/* first try getting the cached buffer with only a read lock held */
+	pthread_rwlock_rdlock(&obj_list_cache.lock);
+	if (obj_list_cache.tree_version == obj_list_cache.wd_buf_version)
+		goto out;
+
+	/* if that fails grab a write lock for the usually nessecary update */
+	pthread_rwlock_unlock(&obj_list_cache.lock);
+	pthread_rwlock_wrlock(&obj_list_cache.lock);
+	if (obj_list_cache.tree_version == obj_list_cache.wd_buf_version)
+		goto out;
+
+	obj_list_cache.wd_buf_version = obj_list_cache.tree_version;
+	obj_list_cache.wd_buf = xrealloc(obj_list_cache.wd_buf,
+				obj_list_cache.cache_size * sizeof(uint64_t));
+
+	list_for_each_entry(entry, &obj_list_cache.entry_list, list) {
+		if (!entry->in_working_directory) {
+			obj_list_cache.wd_cache_size--;
+			continue;
+		}
+		obj_list_cache.wd_buf[nr++] = entry->oid;
+	}
+	obj_list_cache.wd_cache_size = nr;
+
+out:
+	if (hdr->data_length < obj_list_cache.wd_cache_size * sizeof(uint64_t)) {
+		pthread_rwlock_unlock(&obj_list_cache.lock);
+		sd_eprintf("GET_OBJ_LIST buffer too small");
+		return SD_RES_EIO;
+	}
+
+	rsp->data_length = obj_list_cache.wd_cache_size * sizeof(uint64_t);
+	memcpy(data, obj_list_cache.wd_buf, rsp->data_length);
 	pthread_rwlock_unlock(&obj_list_cache.lock);
 	return SD_RES_SUCCESS;
 }
