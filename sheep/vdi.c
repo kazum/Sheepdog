@@ -533,52 +533,10 @@ int read_vdis(char *data, int len, unsigned int *rsp_len)
 }
 
 struct deletion_work {
-	uint32_t done;
-
 	struct work work;
-	struct list_head dw_siblings;
 	struct request *req;
-
 	uint32_t vid;
-	int nr_copies;
-
-	int count;
-	uint32_t *buf;
 };
-
-static LIST_HEAD(deletion_work_list);
-
-static int delete_inode(struct deletion_work *dw)
-{
-	struct sheepdog_inode *inode = NULL;
-	int ret = SD_RES_SUCCESS;
-
-	inode = zalloc(sizeof(*inode));
-	if (!inode) {
-		eprintf("no memory to allocate inode.\n");
-		goto out;
-	}
-
-	ret = read_object(vid_to_vdi_oid(dw->vid), (char *)inode,
-			  SD_INODE_HEADER_SIZE, 0, dw->nr_copies);
-	if (ret != SD_RES_SUCCESS) {
-		ret = SD_RES_EIO;
-		goto out;
-	}
-
-	memset(inode->name, 0, sizeof(inode->name));
-
-	ret = write_object(vid_to_vdi_oid(dw->vid), (char *)inode,
-			   SD_INODE_HEADER_SIZE, 0, 0, false, dw->nr_copies);
-	if (ret != 0) {
-		ret = SD_RES_EIO;
-		goto out;
-	}
-
-out:
-	free(inode);
-	return ret;
-}
 
 static int notify_vdi_deletion(uint32_t vdi_id)
 {
@@ -600,12 +558,12 @@ static int notify_vdi_deletion(uint32_t vdi_id)
 static void delete_one(struct work *work)
 {
 	struct deletion_work *dw = container_of(work, struct deletion_work, work);
-	uint32_t vdi_id = *(dw->buf + dw->count - dw->done - 1);
+	uint32_t vdi_id = dw->vid;
 	int ret, i, nr_deleted;
 	struct sheepdog_inode *inode = NULL;
 	int nr_copies;
 
-	eprintf("%d %d, %16x\n", dw->done, dw->count, vdi_id);
+	eprintf("%16" PRIx32 "\n", vdi_id);
 
 	inode = malloc(sizeof(*inode));
 	if (!inode) {
@@ -622,9 +580,6 @@ static void delete_one(struct work *work)
 		goto out;
 	}
 
-	if (inode->vdi_size == 0 && inode->name[0] == '\0')
-		goto out;
-
 	for (nr_deleted = 0, i = 0; i < MAX_DATA_OBJS; i++) {
 		uint64_t oid;
 
@@ -633,24 +588,16 @@ static void delete_one(struct work *work)
 
 		oid = vid_to_data_oid(inode->data_vdi_id[i], i);
 
-		if (inode->data_vdi_id[i] != inode->vdi_id) {
-			dprintf("object %" PRIx64 " is base's data, would not be deleted.\n",
-				oid);
-			continue;
-		}
-
-		ret = remove_object(oid, nr_copies);
+		ret = discard_object_ref(oid, inode->data_ref[i].generation,
+					 inode->data_ref[i].count);
 		if (ret != SD_RES_SUCCESS)
-			eprintf("remove object %" PRIx64 " fail, %d\n", oid, ret);
+			eprintf("discard ref %" PRIx64 " fail, %d\n", oid, ret);
 
 		nr_deleted++;
 	}
 
 	if (nr_deleted)
 		notify_vdi_deletion(vdi_id);
-
-	if (*(inode->name) == '\0')
-		goto out;
 
 	inode->vdi_size = 0;
 	memset(inode->name, 0, sizeof(inode->name));
@@ -666,183 +613,27 @@ static void delete_one_done(struct work *work)
 	struct deletion_work *dw = container_of(work, struct deletion_work, work);
 	struct request *req = dw->req;
 
-	dw->done++;
-	if (dw->done < dw->count) {
-		queue_work(sys->deletion_wqueue, &dw->work);
-		return;
-	}
-
-	list_del(&dw->dw_siblings);
-
 	put_request(req);
-
-	free(dw->buf);
-	free(dw);
-
-	if (!list_empty(&deletion_work_list)) {
-		dw = list_first_entry(&deletion_work_list,
-				      struct deletion_work, dw_siblings);
-
-		queue_work(sys->deletion_wqueue, &dw->work);
-	}
-}
-
-static int fill_vdi_list(struct deletion_work *dw, uint32_t root_vid)
-{
-	int ret, i;
-	struct sheepdog_inode *inode = NULL;
-	int done = dw->count;
-	uint32_t vid;
-	int nr_copies;
-
-	inode = malloc(SD_INODE_HEADER_SIZE);
-	if (!inode) {
-		eprintf("failed to allocate memory\n");
-		goto err;
-	}
-
-	dw->buf[dw->count++] = root_vid;
-again:
-	vid = dw->buf[done++];
-	nr_copies = get_vdi_copy_number(vid);
-	ret = read_backend_object(vid_to_vdi_oid(vid), (char *)inode,
-			  SD_INODE_HEADER_SIZE, 0, nr_copies);
-
-	if (ret != SD_RES_SUCCESS) {
-		eprintf("cannot find VDI object\n");
-		goto err;
-	}
-
-	if (inode->name[0] != '\0' && vid != dw->vid)
-		goto out;
-
-	for (i = 0; i < ARRAY_SIZE(inode->child_vdi_id); i++) {
-		if (!inode->child_vdi_id[i])
-			continue;
-
-		dw->buf[dw->count++] = inode->child_vdi_id[i];
-	}
-
-	if (dw->buf[done])
-		goto again;
-err:
-	free(inode);
-	return 0;
-out:
-	free(inode);
-	return 1;
-}
-
-static uint64_t get_vdi_root(uint32_t vid, bool *cloned)
-{
-	int ret, nr_copies;
-	struct sheepdog_inode *inode = NULL;
-
-	*cloned = false;
-
-	inode = malloc(SD_INODE_HEADER_SIZE);
-	if (!inode) {
-		eprintf("failed to allocate memory\n");
-		vid = 0;
-		goto out;
-	}
-next:
-	nr_copies = get_vdi_copy_number(vid);
-	ret = read_backend_object(vid_to_vdi_oid(vid), (char *)inode,
-			  SD_INODE_HEADER_SIZE, 0, nr_copies);
-
-	if (vid == inode->vdi_id && inode->snap_id == 1
-			&& inode->parent_vdi_id != 0
-			&& !inode->snap_ctime) {
-		dprintf("vdi %" PRIx32 " is a cloned vdi.\n", vid);
-		/* current vdi is a cloned vdi */
-		*cloned = true;
-	}
-
-	if (ret != SD_RES_SUCCESS) {
-		eprintf("cannot find VDI object\n");
-		vid = 0;
-		goto out;
-	}
-
-	if (!inode->parent_vdi_id)
-		goto out;
-
-	vid = inode->parent_vdi_id;
-
-	goto next;
-out:
-	free(inode);
-
-	return vid;
 }
 
 static int start_deletion(struct request *req, uint32_t vid)
 {
 	struct deletion_work *dw = NULL;
-	int ret = SD_RES_NO_MEM;
-	bool cloned;
-	uint32_t root_vid;
 
 	dw = zalloc(sizeof(struct deletion_work));
 	if (!dw)
-		goto err;
+		return SD_RES_NO_MEM;
 
-	/* buf is to store vdi id of every object */
-	dw->buf = zalloc(SD_INODE_SIZE - SD_INODE_HEADER_SIZE);
-	if (!dw->buf)
-		goto err;
-
-	dw->count = 0;
 	dw->vid = vid;
 	dw->req = req;
-	dw->nr_copies = get_vdi_copy_number(vid);
 
 	dw->work.fn = delete_one;
 	dw->work.done = delete_one_done;
 
-	root_vid = get_vdi_root(dw->vid, &cloned);
-	if (!root_vid) {
-		ret = SD_RES_EIO;
-		goto err;
-	}
-
-	ret = fill_vdi_list(dw, root_vid);
-	if (ret) {
-		/* if the VDI is a cloned VDI, delete its objects
-		 * no matter whether the VDI tree is clear. */
-		if (cloned) {
-			dw->buf[0] = vid;
-			dw->count = 1;
-		} else {
-			dprintf("snapshot chain has valid vdi, "
-				"just mark vdi %" PRIx32 " as deleted.\n",
-				dw->vid);
-			delete_inode(dw);
-			return SD_RES_SUCCESS;
-		}
-	}
-
-	dprintf("%d\n", dw->count);
-
-	if (dw->count == 0)
-		goto out;
-
 	uatomic_inc(&req->refcnt);
+	queue_work(sys->deletion_wqueue, &dw->work);
 
-	if (list_empty(&deletion_work_list)) {
-		list_add_tail(&dw->dw_siblings, &deletion_work_list);
-		queue_work(sys->deletion_wqueue, &dw->work);
-	} else
-		list_add_tail(&dw->dw_siblings, &deletion_work_list);
-out:
 	return SD_RES_SUCCESS;
-err:
-	if (dw)
-		free(dw->buf);
-	free(dw);
-
-	return ret;
 }
 
 int get_vdi_attr(struct sheepdog_vdi_attr *vattr, int data_len,
