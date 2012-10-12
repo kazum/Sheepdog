@@ -782,46 +782,10 @@ int read_vdis(char *data, int len, unsigned int *rsp_len)
 }
 
 struct deletion_work {
-	uint32_t done;
-
 	struct work work;
-	struct list_node list;
 	struct request *req;
-
 	uint32_t vid;
-
-	int count;
-	uint32_t *buf;
 };
-
-static LIST_HEAD(deletion_work_list);
-
-static int delete_inode(struct deletion_work *dw)
-{
-	struct sd_inode *inode = NULL;
-	int ret = SD_RES_SUCCESS;
-
-	inode = xzalloc(sizeof(*inode));
-	ret = read_object(vid_to_vdi_oid(dw->vid), (char *)inode,
-			  SD_INODE_HEADER_SIZE, 0);
-	if (ret != SD_RES_SUCCESS) {
-		ret = SD_RES_EIO;
-		goto out;
-	}
-
-	memset(inode->name, 0, sizeof(inode->name));
-
-	ret = write_object(vid_to_vdi_oid(dw->vid), (char *)inode,
-			   SD_INODE_HEADER_SIZE, 0, false);
-	if (ret != 0) {
-		ret = SD_RES_EIO;
-		goto out;
-	}
-
-out:
-	free(inode);
-	return ret;
-}
 
 static int notify_vdi_deletion(uint32_t vdi_id)
 {
@@ -843,11 +807,11 @@ static int notify_vdi_deletion(uint32_t vdi_id)
 static void delete_one(struct work *work)
 {
 	struct deletion_work *dw = container_of(work, struct deletion_work, work);
-	uint32_t vdi_id = *(dw->buf + dw->count - dw->done - 1);
+	uint32_t vdi_id = dw->vid;
 	int ret, i, nr_deleted, nr_objs;
 	struct sd_inode *inode = NULL;
 
-	sd_debug("%d %d, %16x", dw->done, dw->count, vdi_id);
+	sd_debug("%16x", vdi_id);
 
 	inode = malloc(sizeof(*inode));
 	if (!inode) {
@@ -863,9 +827,6 @@ static void delete_one(struct work *work)
 		goto out;
 	}
 
-	if (inode->vdi_size == 0 && vdi_is_deleted(inode))
-		goto out;
-
 	nr_objs = count_data_objs(inode);
 	for (nr_deleted = 0, i = 0; i < nr_objs; i++) {
 		uint64_t oid;
@@ -875,24 +836,18 @@ static void delete_one(struct work *work)
 
 		oid = vid_to_data_oid(inode->data_vdi_id[i], i);
 
-		if (inode->data_vdi_id[i] != inode->vdi_id) {
-			sd_debug("object %" PRIx64 " is base's data, would"
-				 " not be deleted.", oid);
-			continue;
-		}
-
-		ret = remove_object(oid);
+		ret = dec_object_refcnt(oid, inode->data_ref[i].generation,
+					inode->data_ref[i].count);
 		if (ret != SD_RES_SUCCESS)
-			sd_err("remove object %" PRIx64 " fail, %d", oid, ret);
+			sd_err("discard ref %" PRIx64 " fail, %d", oid, ret);
 
 		nr_deleted++;
 	}
 
-	if (vdi_is_deleted(inode))
-		goto out;
-
 	inode->vdi_size = 0;
 	memset(inode->name, 0, sizeof(inode->name));
+	memset((char *)inode + SD_INODE_HEADER_SIZE, 0,
+	       SD_INODE_SIZE - SD_INODE_HEADER_SIZE);
 
 	write_object(vid_to_vdi_oid(vdi_id), (void *)inode,
 		     sizeof(*inode), 0, false);
@@ -908,174 +863,25 @@ static void delete_one_done(struct work *work)
 	struct deletion_work *dw = container_of(work, struct deletion_work, work);
 	struct request *req = dw->req;
 
-	dw->done++;
-	if (dw->done < dw->count) {
-		queue_work(sys->deletion_wqueue, &dw->work);
-		return;
-	}
-
-	list_del(&dw->list);
-
 	put_request(req);
-
-	free(dw->buf);
-	free(dw);
-
-	if (!list_empty(&deletion_work_list)) {
-		dw = list_first_entry(&deletion_work_list,
-				      struct deletion_work, list);
-
-		queue_work(sys->deletion_wqueue, &dw->work);
-	}
-}
-
-static int fill_vdi_list(struct deletion_work *dw, uint32_t root_vid)
-{
-	int ret, i;
-	struct sd_inode *inode = NULL;
-	int done = dw->count;
-	uint32_t vid;
-
-	inode = malloc(SD_INODE_HEADER_SIZE);
-	if (!inode) {
-		sd_err("failed to allocate memory");
-		goto err;
-	}
-
-	dw->buf[dw->count++] = root_vid;
-again:
-	vid = dw->buf[done++];
-	ret = read_backend_object(vid_to_vdi_oid(vid), (char *)inode,
-			  SD_INODE_HEADER_SIZE, 0);
-
-	if (ret != SD_RES_SUCCESS) {
-		sd_err("cannot find VDI object");
-		goto err;
-	}
-
-	if (!vdi_is_deleted(inode) && vid != dw->vid)
-		goto out;
-
-	for (i = 0; i < ARRAY_SIZE(inode->child_vdi_id); i++) {
-		if (!inode->child_vdi_id[i])
-			continue;
-
-		dw->buf[dw->count++] = inode->child_vdi_id[i];
-	}
-
-	if (dw->buf[done])
-		goto again;
-err:
-	free(inode);
-	return 0;
-out:
-	free(inode);
-	return 1;
-}
-
-static uint64_t get_vdi_root(uint32_t vid, bool *cloned)
-{
-	int ret;
-	struct sd_inode *inode = NULL;
-
-	*cloned = false;
-
-	inode = malloc(SD_INODE_HEADER_SIZE);
-	if (!inode) {
-		sd_err("failed to allocate memory");
-		vid = 0;
-		goto out;
-	}
-next:
-	ret = read_backend_object(vid_to_vdi_oid(vid), (char *)inode,
-			  SD_INODE_HEADER_SIZE, 0);
-
-	if (vid == inode->vdi_id && inode->snap_id == 1
-			&& inode->parent_vdi_id != 0
-			&& !inode->snap_ctime) {
-		sd_debug("vdi %" PRIx32 " is a cloned vdi.", vid);
-		/* current vdi is a cloned vdi */
-		*cloned = true;
-	}
-
-	if (ret != SD_RES_SUCCESS) {
-		sd_err("cannot find VDI object");
-		vid = 0;
-		goto out;
-	}
-
-	if (!inode->parent_vdi_id)
-		goto out;
-
-	vid = inode->parent_vdi_id;
-
-	goto next;
-out:
-	free(inode);
-
-	return vid;
 }
 
 static int start_deletion(struct request *req, uint32_t vid)
 {
 	struct deletion_work *dw = NULL;
-	int ret = SD_RES_NO_MEM;
-	bool cloned;
-	uint32_t root_vid;
 
 	dw = xzalloc(sizeof(struct deletion_work));
-	/* buf is to store vdi id of every object */
-	dw->buf = xzalloc(SD_INODE_SIZE - SD_INODE_HEADER_SIZE);
-	dw->count = 0;
+
 	dw->vid = vid;
 	dw->req = req;
 
 	dw->work.fn = delete_one;
 	dw->work.done = delete_one_done;
 
-	root_vid = get_vdi_root(dw->vid, &cloned);
-	if (!root_vid) {
-		ret = SD_RES_EIO;
-		goto err;
-	}
-
-	ret = fill_vdi_list(dw, root_vid);
-	if (ret) {
-		/*
-		 * if the VDI is a cloned VDI, delete its objects
-		 * no matter whether the VDI tree is clear.
-		 */
-		if (cloned) {
-			dw->buf[0] = vid;
-			dw->count = 1;
-		} else {
-			sd_debug("snapshot chain has valid vdi, just mark vdi %"
-				 PRIx32 " as deleted.", dw->vid);
-			delete_inode(dw);
-			return SD_RES_SUCCESS;
-		}
-	}
-
-	sd_debug("%d", dw->count);
-
-	if (dw->count == 0)
-		goto out;
-
 	refcount_inc(&req->refcnt);
+	queue_work(sys->deletion_wqueue, &dw->work);
 
-	if (list_empty(&deletion_work_list)) {
-		list_add_tail(&dw->list, &deletion_work_list);
-		queue_work(sys->deletion_wqueue, &dw->work);
-	} else
-		list_add_tail(&dw->list, &deletion_work_list);
-out:
 	return SD_RES_SUCCESS;
-err:
-	if (dw)
-		free(dw->buf);
-	free(dw);
-
-	return ret;
 }
 
 /* Calculate a vdi attribute id from sheepdog_vdi_attr. */
