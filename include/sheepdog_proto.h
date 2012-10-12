@@ -102,8 +102,7 @@
 #define SD_MAX_VDI_SIZE (SD_DATA_OBJ_SIZE * MAX_DATA_OBJS)
 
 #define SD_INODE_SIZE (sizeof(struct sheepdog_inode))
-#define SD_INODE_HEADER_SIZE (sizeof(struct sheepdog_inode) - \
-			      sizeof(uint32_t) * MAX_DATA_OBJS)
+#define SD_INODE_HEADER_SIZE offsetof(struct sheepdog_inode, data_vdi_id)
 #define SD_ATTR_OBJ_SIZE (sizeof(struct sheepdog_vdi_attr))
 #define CURRENT_VDI_ID 0
 
@@ -159,6 +158,11 @@ struct sd_rsp {
 	};
 };
 
+struct generation_reference {
+	int32_t generation;
+	int32_t count;
+};
+
 struct sheepdog_inode {
 	char name[SD_MAX_VDI_LEN];
 	char tag[SD_MAX_VDI_TAG_LEN];
@@ -175,6 +179,7 @@ struct sheepdog_inode {
 	uint32_t parent_vdi_id;
 	uint32_t child_vdi_id[MAX_CHILDREN];
 	uint32_t data_vdi_id[MAX_DATA_OBJS];
+	struct generation_reference data_ref[MAX_DATA_OBJS];
 };
 
 struct sheepdog_vdi_attr {

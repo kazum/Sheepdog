@@ -280,6 +280,12 @@ static int create_vdi_obj(struct vdi_iocb *iocb, uint32_t new_vid,
 			ret = SD_RES_NO_BASE_VDI;
 			goto out;
 		}
+
+		for (i = 0; i < ARRAY_SIZE(base->data_ref); i++) {
+			base->data_ref[i].count++;
+			new->data_ref[i].generation =
+				base->data_ref[i].generation + 1;
+		}
 	}
 
 	if (iocb->snapid && cur_vid != iocb->base_vid) {
@@ -294,7 +300,7 @@ static int create_vdi_obj(struct vdi_iocb *iocb, uint32_t new_vid,
 
 	if (iocb->base_vid) {
 		ret = write_object(vid_to_vdi_oid(iocb->base_vid), (char *)base,
-				   SD_INODE_HEADER_SIZE, 0, 0, false, 0);
+				   SD_INODE_SIZE, 0, 0, false, 0);
 		if (ret != 0) {
 			vprintf(SDOG_ERR, "failed\n");
 			ret = SD_RES_BASE_VDI_WRITE;
