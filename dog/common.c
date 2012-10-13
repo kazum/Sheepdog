@@ -136,7 +136,6 @@ int parse_vdi(vdi_parser_func_t func, size_t size, void *data)
 	struct sd_req req;
 	struct sd_rsp *rsp = (struct sd_rsp *)&req;
 	static DECLARE_BITMAP(vdi_inuse, SD_NR_VDIS);
-	unsigned int rlen = sizeof(vdi_inuse);
 
 	sd_init_req(&req, SD_OP_READ_VDIS);
 	req.data_length = sizeof(vdi_inuse);
@@ -165,9 +164,9 @@ int parse_vdi(vdi_parser_func_t func, size_t size, void *data)
 			continue;
 
 		if (size > SD_INODE_HEADER_SIZE) {
-			rlen = count_data_objs(&i) * sizeof(i.data_vdi_id[0]);
-			if (rlen > size - SD_INODE_HEADER_SIZE)
-				rlen = size - SD_INODE_HEADER_SIZE;
+			int idx = DIV_ROUND_UP(i.vdi_size, SD_DATA_OBJ_SIZE);
+			size_t rlen = min(data_vid_offset(idx), size);
+			rlen -= SD_INODE_HEADER_SIZE;
 
 			ret = sd_read_object(oid, ((char *)&i) + SD_INODE_HEADER_SIZE,
 					     rlen, SD_INODE_HEADER_SIZE, true);

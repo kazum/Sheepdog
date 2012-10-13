@@ -182,8 +182,7 @@ static int volume_rw_object(char *buf, uint64_t oid, size_t size,
 		vdi->inode->data_vdi_id[idx] = vid;
 		/* writeback inode update */
 		if (volume_rw_object((char *)&vid, vid_to_vdi_oid(vid),
-				     sizeof(vid),
-				     SD_INODE_HEADER_SIZE + sizeof(vid) * idx,
+				     sizeof(vid), data_vid_offset(idx),
 				     VOLUME_WRITE) < 0)
 			return -1;
 	}

@@ -563,9 +563,8 @@ static int vdi_create(int argc, char **argv)
 
 		inode->data_vdi_id[idx] = vid;
 		ret = sd_write_object(vid_to_vdi_oid(vid), 0, &vid, sizeof(vid),
-				      SD_INODE_HEADER_SIZE + sizeof(vid) * idx,
-				      0, inode->nr_copies, inode->copy_policy,
-				      false, true);
+				      data_vid_offset(idx), 0, inode->nr_copies,
+				      inode->copy_policy, false, true);
 		if (ret) {
 			ret = EXIT_FAILURE;
 			goto out;
@@ -688,8 +687,7 @@ static int vdi_clone(int argc, char **argv)
 		}
 
 		ret = sd_write_object(vid_to_vdi_oid(new_vid), 0, &new_vid,
-				      sizeof(new_vid),
-				SD_INODE_HEADER_SIZE + sizeof(new_vid) * idx, 0,
+				      sizeof(new_vid), data_vid_offset(idx), 0,
 				      inode->nr_copies, inode->copy_policy,
 				      false, true);
 		if (ret) {
@@ -1336,8 +1334,7 @@ static int vdi_write(int argc, char **argv)
 
 		if (create) {
 			ret = sd_write_object(vid_to_vdi_oid(vid), 0, &vid,
-					      sizeof(vid),
-				SD_INODE_HEADER_SIZE + sizeof(vid) * idx,
+					      sizeof(vid), data_vid_offset(idx),
 					      flags, inode->nr_copies,
 					      inode->copy_policy, false, false);
 			if (ret) {
@@ -1906,8 +1903,8 @@ static int restore_obj(struct obj_backup *backup, uint32_t vid,
 		return ret;
 
 	return sd_write_object(vid_to_vdi_oid(vid), 0, &vid, sizeof(vid),
-			       SD_INODE_HEADER_SIZE + sizeof(vid) * backup->idx,
-			       0, parent_inode->nr_copies,
+			       data_vid_offset(backup->idx), 0,
+			       parent_inode->nr_copies,
 			       parent_inode->copy_policy, false, true);
 }
 

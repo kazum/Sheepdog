@@ -817,7 +817,7 @@ static int local_discard_obj(struct request *req)
 
 	sd_debug("%"PRIx64, oid);
 	ret = write_object(vid_to_vdi_oid(vid), (char *)&zero, sizeof(zero),
-			   SD_INODE_HEADER_SIZE + sizeof(vid) * idx, false);
+			   data_vid_offset(idx), false);
 	if (ret != SD_RES_SUCCESS)
 		return ret;
 	if (remove_object(oid) != SD_RES_SUCCESS)
