@@ -365,6 +365,7 @@ int write_object(uint64_t oid, char *data, unsigned int datalen,
 int read_object(uint64_t oid, char *data, unsigned int datalen,
 		uint64_t offset);
 int remove_object(uint64_t oid);
+int dec_object_refcnt(uint64_t data_oid, uint32_t generation, uint32_t refcnt);
 
 int exec_local_req(struct sd_req *rq, void *data);
 void local_req_init(void);
@@ -409,6 +410,7 @@ int gateway_read_obj(struct request *req);
 int gateway_write_obj(struct request *req);
 int gateway_create_and_write_obj(struct request *req);
 int gateway_remove_obj(struct request *req);
+int gateway_decref_object(struct request *req);
 bool is_erasure_oid(uint64_t oid);
 bool is_erasure_obj(uint64_t oid, uint8_t copy_policy);
 

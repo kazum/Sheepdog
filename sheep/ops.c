@@ -948,6 +948,83 @@ static int peer_create_and_write_obj(struct request *req)
 	return sd_store->create_and_write(hdr->obj.oid, &iocb);
 }
 
+static int peer_decref_object(struct request *req)
+{
+	struct sd_req *hdr = &req->rq;
+	int ret;
+	uint32_t epoch = hdr->epoch;
+	uint64_t ledger_oid = hdr->ref.oid;
+	uint64_t data_oid = ledger_oid_to_data_oid(ledger_oid);
+	uint32_t generation = hdr->ref.generation;
+	uint32_t count = hdr->ref.count;
+	uint32_t *ledger = NULL, *zero = xzalloc(SD_LEDGER_OBJ_SIZE);
+	bool exist = false, locked = false;
+	static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+	sd_debug("%" PRIx64 ", %" PRIu32 ", %" PRIu32 ", %" PRIu32, ledger_oid,
+		 epoch, generation, count);
+
+	ledger = xvalloc(SD_LEDGER_OBJ_SIZE);
+	memset(ledger, 0, SD_LEDGER_OBJ_SIZE);
+
+	struct siocb iocb = {
+		.epoch = epoch,
+		.buf = ledger,
+		.length = SD_LEDGER_OBJ_SIZE,
+	};
+
+	/* we don't allow concurrent updates to the ledger objects */
+	pthread_mutex_lock(&lock);
+	locked = true;
+
+	ret = sd_store->read(ledger_oid, &iocb);
+	switch (ret) {
+	case SD_RES_SUCCESS:
+		exist = true;
+		break;
+	case SD_RES_NO_OBJ:
+		/* initialize ledger */
+		ledger[0] = 1;
+		break;
+	default:
+		goto out;
+	}
+
+	ledger[generation]--;
+	ledger[generation + 1] += count;
+
+	if (memcmp(ledger, zero, SD_LEDGER_OBJ_SIZE) == 0) {
+		/* reclaim object */
+		if (exist) {
+			ret = sd_store->remove_object(ledger_oid);
+			if (ret != SD_RES_SUCCESS) {
+				sd_err("error %s", sd_strerror(ret));
+				goto out;
+			}
+		}
+		pthread_mutex_unlock(&lock);
+		locked = false;
+
+		ret = remove_object(data_oid);
+		if (ret != SD_RES_SUCCESS) {
+			sd_err("error %s", sd_strerror(ret));
+			goto out;
+		}
+	} else {
+		/* update ledger */
+		if (exist)
+			ret = sd_store->write(ledger_oid, &iocb);
+		else
+			ret = sd_store->create_and_write(ledger_oid, &iocb);
+	}
+out:
+	if (locked)
+		pthread_mutex_unlock(&lock);
+	free(ledger);
+	free(zero);
+	return ret;
+}
+
 static int local_get_loglevel(struct request *req)
 {
 	int32_t current_level;
@@ -1286,6 +1363,12 @@ static struct sd_op_template sd_ops[] = {
 		.process_work = gateway_remove_obj,
 	},
 
+	[SD_OP_DECREF_OBJ] = {
+		.name = "DECREF_OBJ",
+		.type = SD_OP_TYPE_GATEWAY,
+		.process_work = gateway_decref_object,
+	},
+
 	/* peer I/O operations */
 	[SD_OP_CREATE_AND_WRITE_PEER] = {
 		.name = "CREATE_AND_WRITE_PEER",
@@ -1309,6 +1392,12 @@ static struct sd_op_template sd_ops[] = {
 		.name = "REMOVE_PEER",
 		.type = SD_OP_TYPE_PEER,
 		.process_work = peer_remove_obj,
+	},
+
+	[SD_OP_DECREF_PEER] = {
+		.name = "DECREF_PEER",
+		.type = SD_OP_TYPE_PEER,
+		.process_work = peer_decref_object,
 	},
 };
 
@@ -1390,6 +1479,7 @@ static int map_table[] = {
 	[SD_OP_READ_OBJ] = SD_OP_READ_PEER,
 	[SD_OP_WRITE_OBJ] = SD_OP_WRITE_PEER,
 	[SD_OP_REMOVE_OBJ] = SD_OP_REMOVE_PEER,
+	[SD_OP_DECREF_OBJ] = SD_OP_DECREF_PEER,
 };
 
 int gateway_to_peer_opcode(int opcode)

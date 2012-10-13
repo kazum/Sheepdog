@@ -622,3 +622,8 @@ int gateway_remove_obj(struct request *req)
 {
 	return gateway_forward_request(req);
 }
+
+int gateway_decref_object(struct request *req)
+{
+	return gateway_forward_request(req);
+}

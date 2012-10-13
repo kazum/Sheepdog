@@ -446,3 +446,27 @@ int remove_object(uint64_t oid)
 
 	return ret;
 }
+
+int dec_object_refcnt(uint64_t data_oid, uint32_t generation, uint32_t refcnt)
+{
+	struct sd_req hdr;
+	int ret;
+	uint64_t ledger_oid = data_oid_to_ledger_oid(data_oid);
+
+	sd_debug("%" PRId32 ", %" PRId32, generation, refcnt);
+
+	if (generation == 0 && refcnt == 0)
+		return remove_object(data_oid);
+
+	sd_init_req(&hdr, SD_OP_DECREF_OBJ);
+	hdr.ref.oid = ledger_oid;
+	hdr.ref.generation = generation;
+	hdr.ref.count = refcnt;
+
+	ret = exec_local_req(&hdr, NULL);
+	if (ret != SD_RES_SUCCESS)
+		sd_err("failed to decrement reference %" PRIx64 ", %s",
+		       ledger_oid, sd_strerror(ret));
+
+	return ret;
+}
