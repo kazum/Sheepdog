@@ -343,3 +343,8 @@ int gateway_flush_nodes(struct request *req)
 {
 	return gateway_forward_request(req, true);
 }
+
+int gateway_discard_ref(struct request *req)
+{
+	return gateway_forward_request(req, false);
+}

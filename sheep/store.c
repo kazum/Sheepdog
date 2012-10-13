@@ -551,3 +551,29 @@ int remove_object(uint64_t oid, int copies)
 
 	return ret;
 }
+
+int discard_object_ref(uint64_t data_oid, uint32_t generation, uint32_t refcnt)
+{
+	struct sd_req hdr;
+	int ret;
+	uint64_t ledger_oid = data_oid_to_ledger_oid(data_oid);
+
+	dprintf("%" PRId32 ", %" PRId32 "\n", generation, refcnt);
+
+	if (generation == 0 && refcnt == 0) {
+		int nr_copies = get_vdi_copy_number(oid_to_vid(data_oid));
+		return remove_object(data_oid, nr_copies);
+	}
+
+	sd_init_req(&hdr, SD_OP_DISCARD_REF);
+	hdr.ref.oid = ledger_oid;
+	hdr.ref.generation = generation;
+	hdr.ref.count = refcnt;
+
+	ret = exec_local_req(&hdr, NULL);
+	if (ret != SD_RES_SUCCESS)
+		eprintf("failed to discard reference %" PRIx64 ", %x\n",
+			ledger_oid, ret);
+
+	return ret;
+}
