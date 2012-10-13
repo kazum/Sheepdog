@@ -797,92 +797,12 @@ static int do_create_and_write_obj(struct siocb *iocb, struct sd_req *hdr,
 	return sd_store->create_and_write(hdr->obj.oid, iocb);
 }
 
-/* This function decreases a refcnt of vid_to_data_oid(old_vid, idx)
-   and increases one of vid_to_data_oid(new_vid, idx) */
-static int do_update_obj_refcnt(struct siocb *iocb, uint64_t vdi_oid, int idx,
-				uint32_t new_vid)
-{
-	int ret;
-	uint32_t old_vid;
-	struct generation_reference ref;
-	const off_t data_ref_offset = offsetof(struct sheepdog_inode, data_ref);
-
-	/* read the previous vdi_id */
-	iocb->buf = &old_vid;
-	iocb->offset = SD_INODE_HEADER_SIZE + idx * sizeof(old_vid);
-	iocb->length = sizeof(old_vid);
-
-	ret = sd_store->read(vdi_oid, iocb);
-	if (ret != SD_RES_SUCCESS) {
-		eprintf("error %" PRIx64 ", %" PRIu32 "\n", vdi_oid, idx);
-		return ret;
-	}
-
-	if (old_vid == 0 || old_vid == new_vid)
-		return SD_RES_SUCCESS;
-
-	/* read an old object reference */
-	iocb->buf = &ref;
-	iocb->length = sizeof(ref);
-	iocb->offset = data_ref_offset + sizeof(ref) * idx;
-
-	ret = sd_store->read(vdi_oid, iocb);
-	if (ret != SD_RES_SUCCESS) {
-		eprintf("error %" PRIx64 ", %" PRIu32 "\n", vdi_oid, idx);
-		return ret;
-	}
-
-	ret = discard_object_ref(vid_to_data_oid(old_vid, idx),
-				 ref.generation, ref.count);
-	if (ret != SD_RES_SUCCESS) {
-		eprintf("fail, %d\n", ret);
-		return ret;
-	}
-
-	/* create a new reference */
-	ref.generation = 0;
-	ref.count = 0;
-	return sd_store->write(vdi_oid, iocb);
-}
-
-static int update_obj_refcnt(struct siocb *iocb, uint64_t vdi_oid,
-			     uint32_t length, uint64_t offset, void *data)
-{
-	int i, start, end, ret;
-	uint32_t *new_vids = (uint32_t *)data;
-
-	dprintf("%" PRId64 ", %" PRId32 "\n", offset, length);
-
-	/* update reference count only when inode->data_vdi_ids are updated */
-	if (offset < SD_INODE_HEADER_SIZE ||
-	    offsetof(struct sheepdog_inode, data_ref) < offset + length)
-		return SD_RES_SUCCESS;
-
-	start = (offset - SD_INODE_HEADER_SIZE) / sizeof(uint32_t);
-	end = (offset + length - SD_INODE_HEADER_SIZE) / sizeof(uint32_t);
-
-	for (i = start; i < end; i++) {
-		ret = do_update_obj_refcnt(iocb, vdi_oid, i, new_vids[i]);
-		if (ret != SD_RES_SUCCESS)
-			break;
-	}
-
-	return ret;
-}
-
 static int do_write_obj(struct siocb *iocb, struct sd_req *hdr, uint32_t epoch,
 			void *data)
 {
 	uint64_t oid = hdr->obj.oid;
 	int ret = SD_RES_SUCCESS;
 	void *jd = NULL;
-
-	if (is_vdi_obj(oid)) {
-		ret = update_obj_refcnt(iocb, oid, hdr->data_length,
-					hdr->obj.offset, data);
-		if (ret != SD_RES_SUCCESS)
-			return ret;
-	}
 
 	iocb->buf = data;
 	iocb->length = hdr->data_length;
