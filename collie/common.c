@@ -183,11 +183,7 @@ int parse_vdi(vdi_parser_func_t func, size_t size, void *data)
 			continue;
 
 		if (size > SD_INODE_HEADER_SIZE) {
-			rlen = DIV_ROUND_UP(i.vdi_size, SD_DATA_OBJ_SIZE) *
-				sizeof(i.data_vdi_id[0]);
-			if (rlen > size - SD_INODE_HEADER_SIZE)
-				rlen = size - SD_INODE_HEADER_SIZE;
-
+			rlen = size - SD_INODE_HEADER_SIZE;
 			ret = sd_read_object(oid, ((char *)&i) + SD_INODE_HEADER_SIZE,
 					     rlen, SD_INODE_HEADER_SIZE, true);
 

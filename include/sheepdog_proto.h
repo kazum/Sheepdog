@@ -103,7 +103,7 @@
 #define SD_MAX_VDI_SIZE (SD_DATA_OBJ_SIZE * MAX_DATA_OBJS)
 
 #define SD_INODE_SIZE (sizeof(struct sheepdog_inode))
-#define SD_INODE_HEADER_SIZE offsetof(struct sheepdog_inode, data_vdi_id)
+#define SD_INODE_HEADER_SIZE offsetof(struct sheepdog_inode, __unused)
 #define SD_ATTR_OBJ_SIZE (sizeof(struct sheepdog_vdi_attr))
 #define SD_LEDGER_OBJ_SIZE (UINT64_C(1) << 22)
 #define CURRENT_VDI_ID 0
@@ -184,7 +184,7 @@ struct sheepdog_inode {
 	uint32_t snap_id;
 	uint32_t vdi_id;
 	uint32_t parent_vdi_id;
-	uint32_t child_vdi_id[MAX_CHILDREN];
+	uint32_t __unused[MAX_CHILDREN];
 	uint32_t data_vdi_id[MAX_DATA_OBJS];
 	struct generation_reference data_ref[MAX_DATA_OBJS];
 };
@@ -322,6 +322,12 @@ static inline uint64_t ledger_oid_to_data_oid(uint64_t oid)
 static inline uint64_t data_oid_to_ledger_oid(uint64_t oid)
 {
 	return LEDGER_BIT | oid;
+}
+
+static inline uint64_t get_data_vid_offset(int idx)
+{
+	return offsetof(struct sheepdog_inode, data_vdi_id) +
+		sizeof(uint32_t) * idx;
 }
 
 #endif

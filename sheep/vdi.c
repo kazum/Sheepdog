@@ -271,18 +271,6 @@ static int create_vdi_obj(struct vdi_iocb *iocb, uint32_t new_vid,
 		new->parent_vdi_id = iocb->base_vid;
 		memcpy(new->data_vdi_id, base->data_vdi_id, sizeof(new->data_vdi_id));
 
-		for (i = 0; i < ARRAY_SIZE(base->child_vdi_id); i++) {
-			if (!base->child_vdi_id[i]) {
-				base->child_vdi_id[i] = new_vid;
-				break;
-			}
-		}
-
-		if (i == ARRAY_SIZE(base->child_vdi_id)) {
-			ret = SD_RES_NO_BASE_VDI;
-			goto out;
-		}
-
 		for (i = 0; i < ARRAY_SIZE(base->data_ref); i++) {
 			base->data_ref[i].count++;
 			new->data_ref[i].generation =
