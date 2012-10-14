@@ -556,7 +556,7 @@ int discard_object_ref(uint64_t data_oid, uint32_t generation, uint32_t refcnt)
 {
 	struct sd_req hdr;
 	int ret;
-	uint64_t ledger_oid = data_oid_to_ledger_oid(data_oid);
+	uint64_t ledger_oid = oid_to_ledger_oid(data_oid);
 
 	dprintf("%" PRId32 ", %" PRId32 "\n", generation, refcnt);
 

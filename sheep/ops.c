@@ -930,7 +930,7 @@ int peer_discard_ref(struct request *req)
 	int ret, nr_copies;
 	uint32_t epoch = hdr->epoch;
 	uint64_t ledger_oid = hdr->ref.oid;
-	uint64_t data_oid = ledger_oid_to_data_oid(ledger_oid);
+	uint64_t data_oid = oid_to_data_oid(ledger_oid);
 	uint32_t generation = hdr->ref.generation;
 	uint32_t count = hdr->ref.count;
 	struct siocb iocb;

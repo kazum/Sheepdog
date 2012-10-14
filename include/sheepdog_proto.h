@@ -93,11 +93,15 @@
  * 60 - 63 ( 4 bits): object type indentifier space
  */
 
+#define SD_OBJ_TYPE_SHIFT       60
+#define SD_OBJ_TYPE_MASK        0xf000000000000000
+#define SD_OBJ_TYPE_VDI         0x8
+#define SD_OBJ_TYPE_VMSTATE     0x4
+#define SD_OBJ_TYPE_VDI_ATTR    0x2
+#define SD_OBJ_TYPE_LEDGER      0x1
+#define SD_OBJ_TYPE_DATA        0x0
+
 #define VDI_SPACE_SHIFT   32
-#define VDI_BIT (UINT64_C(1) << 63)
-#define VMSTATE_BIT (UINT64_C(1) << 62)
-#define VDI_ATTR_BIT (UINT64_C(1) << 61)
-#define LEDGER_BIT (UINT64_C(1) << 60)
 #define MAX_DATA_OBJS (1ULL << 20)
 #define MAX_CHILDREN 1024U
 #define SD_MAX_VDI_LEN 256U
@@ -250,28 +254,27 @@ static inline bool is_data_obj_writeable(struct sheepdog_inode *inode, int idx)
 
 static inline bool is_vdi_obj(uint64_t oid)
 {
-	return !!(oid & VDI_BIT);
+	return (oid >> SD_OBJ_TYPE_SHIFT) == SD_OBJ_TYPE_VDI;
 }
 
 static inline bool is_vmstate_obj(uint64_t oid)
 {
-	return !!(oid & VMSTATE_BIT);
+	return (oid >> SD_OBJ_TYPE_SHIFT) == SD_OBJ_TYPE_VMSTATE;
 }
 
 static inline bool is_vdi_attr_obj(uint64_t oid)
 {
-	return !!(oid & VDI_ATTR_BIT);
+	return (oid >> SD_OBJ_TYPE_SHIFT) == SD_OBJ_TYPE_VDI_ATTR;
 }
 
 static inline bool is_ledger_obj(uint64_t oid)
 {
-	return !!(oid & LEDGER_BIT);
+	return (oid >> SD_OBJ_TYPE_SHIFT) == SD_OBJ_TYPE_LEDGER;
 }
 
 static inline bool is_data_obj(uint64_t oid)
 {
-	return !is_vdi_obj(oid) && !is_vmstate_obj(oid) &&
-		!is_vdi_attr_obj(oid) && !is_ledger_obj(oid);
+	return (oid >> SD_OBJ_TYPE_SHIFT) == SD_OBJ_TYPE_DATA;
 }
 
 static inline size_t get_objsize(uint64_t oid)
@@ -288,6 +291,11 @@ static inline size_t get_objsize(uint64_t oid)
 	return SD_DATA_OBJ_SIZE;
 }
 
+static inline uint64_t oid_to_data_oid(uint64_t oid)
+{
+	return ~SD_OBJ_TYPE_MASK & oid;
+}
+
 static inline uint64_t data_oid_to_idx(uint64_t oid)
 {
 	return oid & (MAX_DATA_OBJS - 1);
@@ -295,7 +303,8 @@ static inline uint64_t data_oid_to_idx(uint64_t oid)
 
 static inline uint64_t vid_to_vdi_oid(uint32_t vid)
 {
-	return VDI_BIT | ((uint64_t)vid << VDI_SPACE_SHIFT);
+	return (((uint64_t)SD_OBJ_TYPE_VDI) << SD_OBJ_TYPE_SHIFT) |
+		((uint64_t)vid << VDI_SPACE_SHIFT);
 }
 
 static inline uint64_t vid_to_data_oid(uint32_t vid, uint32_t idx)
@@ -305,32 +314,20 @@ static inline uint64_t vid_to_data_oid(uint32_t vid, uint32_t idx)
 
 static inline uint32_t oid_to_vid(uint64_t oid)
 {
-	return (~VDI_BIT & oid) >> VDI_SPACE_SHIFT;
+	return oid_to_data_oid(oid) >> VDI_SPACE_SHIFT;
 }
 
 static inline uint64_t vid_to_attr_oid(uint32_t vid, uint32_t attrid)
 {
-	return ((uint64_t)vid << VDI_SPACE_SHIFT) | VDI_ATTR_BIT | attrid;
+	return ((uint64_t)vid << VDI_SPACE_SHIFT) |
+		(((uint64_t)SD_OBJ_TYPE_VDI_ATTR) << SD_OBJ_TYPE_SHIFT) |
+		attrid;
 }
 
-static inline uint32_t attr_oid_to_vid(uint64_t oid)
+static inline uint64_t oid_to_ledger_oid(uint64_t oid)
 {
-	return (~VDI_ATTR_BIT & oid) >> VDI_SPACE_SHIFT;
-}
-
-static inline uint32_t ledger_oid_to_vid(uint64_t oid)
-{
-	return (~LEDGER_BIT & oid) >> VDI_SPACE_SHIFT;
-}
-
-static inline uint64_t ledger_oid_to_data_oid(uint64_t oid)
-{
-	return ~LEDGER_BIT & oid;
-}
-
-static inline uint64_t data_oid_to_ledger_oid(uint64_t oid)
-{
-	return LEDGER_BIT | oid;
+	return (((uint64_t)SD_OBJ_TYPE_LEDGER) << SD_OBJ_TYPE_SHIFT) |
+		oid_to_data_oid(oid);
 }
 
 static inline uint64_t get_data_vid_offset(int idx)
