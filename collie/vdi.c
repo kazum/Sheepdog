@@ -337,11 +337,11 @@ static int vdi_list(int argc, char **argv)
 		struct get_vdi_info info;
 		memset(&info, 0, sizeof(info));
 		info.name = vdiname;
-		if (parse_vdi(print_vdi_list, SD_INODE_SIZE, &info) < 0)
+		if (parse_vdi(print_vdi_list, SD_INODE_BODY_SIZE, &info) < 0)
 			return EXIT_SYSFAIL;
 		return EXIT_SUCCESS;
 	} else {
-		if (parse_vdi(print_vdi_list, SD_INODE_SIZE, NULL) < 0)
+		if (parse_vdi(print_vdi_list, SD_INODE_BODY_SIZE, NULL) < 0)
 			return EXIT_SYSFAIL;
 		return EXIT_SUCCESS;
 	}
@@ -631,7 +631,7 @@ static int vdi_clone(int argc, char **argv)
 
 	ret = read_vdi_obj(src_vdi, vdi_cmd_data.snapshot_id,
 			   vdi_cmd_data.snapshot_tag, &base_vid, inode,
-			   SD_INODE_SIZE);
+			   SD_INODE_BODY_SIZE);
 	if (ret != EXIT_SUCCESS)
 		goto out;
 
@@ -830,7 +830,8 @@ static int vdi_object(int argc, char **argv)
 	if (idx == ~0) {
 		printf("Looking for the inode object 0x%" PRIx32 " with %d nodes\n\n",
 		       vid, sd_nodes_nr);
-		parse_objs(vid_to_vdi_oid(vid), do_print_obj, NULL, SD_INODE_SIZE);
+		parse_objs(vid_to_vdi_oid(vid), do_print_obj, NULL,
+			   SD_INODE_BODY_SIZE);
 	} else {
 		struct get_data_oid_info oid_info = {0};
 
@@ -1185,7 +1186,7 @@ static int vdi_read(int argc, char **argv)
 
 	ret = read_vdi_obj(vdiname, vdi_cmd_data.snapshot_id,
 			   vdi_cmd_data.snapshot_tag, NULL, inode,
-			   SD_INODE_SIZE);
+			   SD_INODE_BODY_SIZE);
 	if (ret != EXIT_SUCCESS)
 		goto out;
 
@@ -1271,7 +1272,7 @@ static int vdi_write(int argc, char **argv)
 		goto out;
 	}
 
-	ret = read_vdi_obj(vdiname, 0, "", &vid, inode, SD_INODE_SIZE);
+	ret = read_vdi_obj(vdiname, 0, "", &vid, inode, SD_INODE_BODY_SIZE);
 	if (ret != EXIT_SUCCESS)
 		goto out;
 
@@ -1486,7 +1487,7 @@ static int vdi_check(int argc, char **argv)
 
 	ret = read_vdi_obj(vdiname, vdi_cmd_data.snapshot_id,
 			   vdi_cmd_data.snapshot_tag, NULL, inode,
-			   SD_INODE_SIZE);
+			   SD_INODE_BODY_SIZE);
 	if (ret != EXIT_SUCCESS)
 		goto out;
 
@@ -1637,13 +1638,13 @@ static int vdi_backup(int argc, char **argv)
 
 	ret = read_vdi_obj(vdiname, vdi_cmd_data.from_snapshot_id,
 			   vdi_cmd_data.from_snapshot_tag, NULL,
-			   from_inode, SD_INODE_SIZE);
+			   from_inode, SD_INODE_BODY_SIZE);
 	if (ret != EXIT_SUCCESS)
 		goto out;
 
 	ret = read_vdi_obj(vdiname, vdi_cmd_data.snapshot_id,
 			   vdi_cmd_data.snapshot_tag, NULL, to_inode,
-			   SD_INODE_SIZE);
+			   SD_INODE_BODY_SIZE);
 	if (ret != EXIT_SUCCESS)
 		goto out;
 
@@ -1748,7 +1749,8 @@ static uint32_t do_restore(char *vdiname, int snapid, const char *tag)
 		goto out;
 	}
 
-	ret = read_vdi_obj(vdiname, snapid, tag, NULL, inode, SD_INODE_SIZE);
+	ret = read_vdi_obj(vdiname, snapid, tag, NULL, inode,
+			   SD_INODE_BODY_SIZE);
 	if (ret != EXIT_SUCCESS)
 		goto out;
 

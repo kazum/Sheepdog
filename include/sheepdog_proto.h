@@ -103,6 +103,7 @@
 #define SD_MAX_VDI_SIZE (SD_DATA_OBJ_SIZE * MAX_DATA_OBJS)
 
 #define SD_INODE_SIZE (sizeof(struct sheepdog_inode))
+#define SD_INODE_BODY_SIZE offsetof(struct sheepdog_inode, data_ref)
 #define SD_INODE_HEADER_SIZE offsetof(struct sheepdog_inode, __unused)
 #define SD_ATTR_OBJ_SIZE (sizeof(struct sheepdog_vdi_attr))
 #define SD_LEDGER_OBJ_SIZE (UINT64_C(1) << 22)

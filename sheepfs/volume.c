@@ -408,7 +408,7 @@ static int init_vdi_info(const char *entry, uint32_t *vid, size_t *size)
 		goto err;
 	}
 
-	inode_buf = malloc(SD_INODE_SIZE);
+	inode_buf = malloc(SD_INODE_BODY_SIZE);
 	if (!inode_buf) {
 		sheepfs_pr("%m\n");
 		goto err;
@@ -426,8 +426,8 @@ static int init_vdi_info(const char *entry, uint32_t *vid, size_t *size)
 	pthread_rwlock_unlock(&vdi_inode_tree_lock);
 	if (dummy)
 		goto err;
-	if (volume_rw_object(inode_buf, vid_to_vdi_oid(*vid), SD_INODE_SIZE,
-			     0, VOLUME_READ) < 0) {
+	if (volume_rw_object(inode_buf, vid_to_vdi_oid(*vid),
+			     SD_INODE_BODY_SIZE, 0, VOLUME_READ) < 0) {
 		rb_erase(&inode->rb, &vdi_inode_tree);
 		sheepfs_pr("failed to read inode for %"PRIx32"\n", *vid);
 		goto err;
