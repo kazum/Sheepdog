@@ -582,8 +582,10 @@ static void delete_one(struct work *work)
 	inode->vdi_size = 0;
 	memset(inode->name, 0, sizeof(inode->name));
 
-	write_object(vid_to_vdi_oid(vdi_id), (void *)inode,
-		     sizeof(*inode), 0, 0, false, nr_copies);
+	ret = write_object(vid_to_deleted_vdi_oid(vdi_id), (void *)inode,
+			   SD_INODE_HEADER_SIZE, 0, 0, true, nr_copies);
+	if (ret == SD_RES_SUCCESS)
+		remove_object(vid_to_vdi_oid(vdi_id), nr_copies);
 out:
 	free(inode);
 }

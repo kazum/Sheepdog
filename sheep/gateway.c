@@ -96,6 +96,20 @@ out:
 		req->rp.data_length = req->rq.data_length;
 		req->rp.obj.offset = 0;
 	}
+
+	if (is_vdi_obj(oid) && req->rq.obj.offset == 0 && ret == SD_RES_NO_OBJ) {
+		uint64_t vdi_oid = req->rq.obj.oid, deleted_vdi_oid;
+		uint32_t length = req->rq.data_length;
+		deleted_vdi_oid = vid_to_deleted_vdi_oid(oid_to_vid(vdi_oid));
+
+		dprintf("read deleted vdi, %" PRIx64 "\n", deleted_vdi_oid);
+		req->rq.obj.oid = deleted_vdi_oid;
+		req->rq.data_length = min(req->rq.data_length,
+					  (uint32_t)SD_INODE_HEADER_SIZE);
+		ret = gateway_read_obj(req);
+		req->rq.obj.oid = vdi_oid;
+		req->rq.data_length = length;
+	}
 	return ret;
 }
 

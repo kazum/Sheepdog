@@ -95,6 +95,7 @@
 
 #define SD_OBJ_TYPE_SHIFT       60
 #define SD_OBJ_TYPE_MASK        0xf000000000000000
+#define SD_OBJ_TYPE_DELETED_VDI 0x9
 #define SD_OBJ_TYPE_VDI         0x8
 #define SD_OBJ_TYPE_VMSTATE     0x4
 #define SD_OBJ_TYPE_VDI_ATTR    0x2
@@ -257,6 +258,11 @@ static inline bool is_vdi_obj(uint64_t oid)
 	return (oid >> SD_OBJ_TYPE_SHIFT) == SD_OBJ_TYPE_VDI;
 }
 
+static inline bool is_deleted_vdi_obj(uint64_t oid)
+{
+	return (oid >> SD_OBJ_TYPE_SHIFT) == SD_OBJ_TYPE_DELETED_VDI;
+}
+
 static inline bool is_vmstate_obj(uint64_t oid)
 {
 	return (oid >> SD_OBJ_TYPE_SHIFT) == SD_OBJ_TYPE_VMSTATE;
@@ -282,6 +288,9 @@ static inline size_t get_objsize(uint64_t oid)
 	if (is_vdi_obj(oid))
 		return SD_INODE_SIZE;
 
+	if (is_deleted_vdi_obj(oid))
+		return SD_INODE_HEADER_SIZE;
+
 	if (is_vdi_attr_obj(oid))
 		return SD_ATTR_OBJ_SIZE;
 
@@ -304,6 +313,12 @@ static inline uint64_t data_oid_to_idx(uint64_t oid)
 static inline uint64_t vid_to_vdi_oid(uint32_t vid)
 {
 	return (((uint64_t)SD_OBJ_TYPE_VDI) << SD_OBJ_TYPE_SHIFT) |
+		((uint64_t)vid << VDI_SPACE_SHIFT);
+}
+
+static inline uint64_t vid_to_deleted_vdi_oid(uint32_t vid)
+{
+	return (((uint64_t)SD_OBJ_TYPE_DELETED_VDI) << SD_OBJ_TYPE_SHIFT) |
 		((uint64_t)vid << VDI_SPACE_SHIFT);
 }
 
