@@ -38,6 +38,12 @@
 #define SD_FLAG_CMD_COW      0x02
 #define SD_FLAG_CMD_CACHE    0x04
 #define SD_FLAG_CMD_DIRECT   0x08 /* don't use object cache */
+
+/* set SD_FLAG_CMD_UPDATE_VID if you want to update a data_vid field
+ * of a vdi object efficiently.  When this flag is set, you need to
+ * set req->obj.cow_oid to the previous oid value. */
+#define SD_FLAG_CMD_UPDATE_VID 0x10
+
 /* flags above 0x80 are sheepdog-internal */
 
 #define SD_RES_SUCCESS       0x00 /* Success */
@@ -154,6 +160,8 @@ struct sd_rsp {
 			uint32_t	__pad;
 			uint32_t	copies;
 			uint64_t	offset;
+			uint32_t	generation;
+			uint32_t	refcnt;
 		} obj;
 		struct {
 			uint32_t	__pad;

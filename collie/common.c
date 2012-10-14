@@ -128,6 +128,17 @@ int sd_write_object(uint64_t oid, uint64_t cow_oid, void *data,
 		return rsp->result;
 	}
 
+	if (create && is_data_obj(oid)) {
+		/* update vdi object */
+		uint32_t vid = oid_to_vid(oid);
+		int idx = data_oid_to_idx(oid);
+
+		flags |= SD_FLAG_CMD_UPDATE_VID;
+		return sd_write_object(vid_to_vdi_oid(vid), cow_oid, &vid,
+				       sizeof(vid), get_data_vid_offset(idx),
+				       flags, copies, false, direct);
+	}
+
 	return SD_RES_SUCCESS;
 }
 

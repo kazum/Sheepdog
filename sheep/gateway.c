@@ -406,9 +406,14 @@ int gateway_write_obj(struct request *req)
 		/* read the previous vids to discard their references later */
 		vids = xzalloc(hdr->data_length);
 		refs = xzalloc(sizeof(*refs) * nr_vids);
-		ret = prepare_obj_refcnt(hdr, vids, refs);
-		if (ret != SD_RES_SUCCESS)
-			goto out;
+		if (hdr->flags & SD_FLAG_CMD_UPDATE_VID) {
+			assert(nr_vids == 1);
+			vids[0] = oid_to_vid(hdr->obj.cow_oid);
+		} else {
+			ret = prepare_obj_refcnt(hdr, vids, refs);
+			if (ret != SD_RES_SUCCESS)
+				goto out;
+		}
 	}
 
 	ret = gateway_forward_request(req, false);
@@ -417,6 +422,12 @@ int gateway_write_obj(struct request *req)
 
 	if (is_data_vid_update(hdr)) {
 		dprintf("udpate reference counts, %" PRIx64 "\n", hdr->obj.oid);
+
+		if (hdr->flags & SD_FLAG_CMD_UPDATE_VID) {
+			refs[0].generation = req->rp.obj.generation;
+			refs[0].count = req->rp.obj.refcnt;
+		}
+
 		ret = update_obj_refcnt(hdr, vids, new_vids, refs);
 	}
 out:

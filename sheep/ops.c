@@ -832,11 +832,38 @@ int peer_write_obj(struct request *req)
 	struct sd_req *hdr = &req->rq;
 	uint32_t epoch = hdr->epoch;
 	struct siocb iocb;
+	int ret;
 
 	memset(&iocb, 0, sizeof(iocb));
 	iocb.epoch = epoch;
 	iocb.flags = hdr->flags;
-	return do_write_obj(&iocb, hdr, epoch, req->data);
+	ret = do_write_obj(&iocb, hdr, epoch, req->data);
+	if (ret != SD_RES_SUCCESS)
+		return ret;
+
+	if (hdr->flags & SD_FLAG_CMD_UPDATE_VID) {
+		/* send reference info with the response of the request */
+		uint64_t oid = hdr->obj.oid;
+		int idx = data_oid_to_idx(hdr->obj.cow_oid);
+		struct generation_reference ref;
+
+		assert(is_vdi_obj(oid));
+
+		iocb.buf = &ref;
+		iocb.offset = SD_INODE_BODY_SIZE + sizeof(ref) * idx;
+		iocb.length = sizeof(ref);
+
+		ret = sd_store->read(oid, &iocb);
+		if (ret == SD_RES_SUCCESS) {
+			dprintf("%" PRIx32", %" PRIx32 "\n", ref.generation,
+				ref.count);
+			req->rp.obj.generation = ref.generation;
+			req->rp.obj.refcnt = ref.count;
+		} else
+			eprintf("error %" PRIx64 ", %" PRIu32 "\n", oid, idx);
+	}
+
+	return ret;
 }
 
 int peer_create_and_write_obj(struct request *req)
