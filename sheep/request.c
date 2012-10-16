@@ -486,7 +486,8 @@ again:
 	return ret;
 }
 
-static struct request *alloc_request(struct client_info *ci, int data_length)
+static struct request *alloc_request(struct client_info *ci, int data_length,
+				     bool write)
 {
 	struct request *req;
 
@@ -497,13 +498,16 @@ static struct request *alloc_request(struct client_info *ci, int data_length)
 	req->ci = ci;
 	ci->refcnt++;
 	if (data_length) {
+		int flags = write ? O_NONBLOCK : 0;
+
 		req->data_length = data_length;
-		req->data = valloc(data_length);
-		if (!req->data) {
+		if (pipe2(req->pipefd, flags) < 0) {
+			eprintf("failed to create pipe, %m\n");
 			free(req);
 			return NULL;
 		}
-	}
+	} else
+		req->pipefd[0] = req->pipefd[1] = -1;
 
 	INIT_LIST_HEAD(&req->request_list);
 	uatomic_set(&req->refcnt, 1);
@@ -519,7 +523,10 @@ static void free_request(struct request *req)
 
 	req->ci->refcnt--;
 	put_vnode_info(req->vinfo);
-	free(req->data);
+	if (req->pipefd[0] >= 0) {
+		close(req->pipefd[0]);
+		close(req->pipefd[1]);
+	}
 	free(req);
 }
 
@@ -567,7 +574,8 @@ static inline int begin_rx(struct client_info *ci)
 	case C_IO_DATA_INIT:
 		data_len = hdr->data_length;
 
-		req = alloc_request(ci, data_len);
+		req = alloc_request(ci, data_len,
+				    !!(hdr->flags & SD_FLAG_CMD_WRITE));
 		if (!req) {
 			conn->c_rx_state = C_IO_CLOSED;
 			break;

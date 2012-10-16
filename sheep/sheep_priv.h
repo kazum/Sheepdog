@@ -43,7 +43,7 @@ struct request {
 
 	struct sd_op_template *op;
 
-	void *data;
+	int pipefd[2];
 	unsigned int data_length;
 
 	struct client_info *ci;
