@@ -49,7 +49,6 @@ static struct sd_option sheep_options[] = {
 	{'F', "log-format", true, "specify log format"},
 	{'g', "gateway", false, "make the progam run as a gateway mode"},
 	{'h', "help", false, "display this help and exit"},
-	{'i', "ioaddr", true, "use separate network card to handle IO requests"},
 	{'j', "journal", true, "use jouranl file to log all the write operations"},
 	{'l', "loglevel", true, "specify the level of logging detail"},
 	{'n', "nosync", false, "drop SYNC for write, only used for testing purpose"},
@@ -311,26 +310,6 @@ static void init_journal_arg(char *arg)
 	}
 }
 
-static char *io_addr, *io_pt;
-static void init_io_arg(char *arg)
-{
-	const char *host = "host=", *port = "port=";
-	int hl = strlen(host), pl = strlen(port);
-
-	if (!strncmp(host, arg, hl)) {
-		arg += hl;
-		io_addr = arg;
-	} else if (!strncmp(port, arg, pl)) {
-		arg += hl;
-		io_pt = arg;
-	} else {
-		fprintf(stderr, "invalid paramters %s. "
-			"Use '-i host=a.b.c.d,port=xxx'\n",
-			arg);
-		exit(1);
-	}
-}
-
 static int init_work_queues(void)
 {
 	if (init_wqueue_eventfd())
@@ -451,7 +430,7 @@ static int lock_and_daemon(bool daemonize, const char *base_dir)
 
 int main(int argc, char **argv)
 {
-	int ch, longindex, ret, port = SD_LISTEN_PORT, io_port = SD_LISTEN_PORT;
+	int ch, longindex, ret, port = SD_LISTEN_PORT;
 	int log_level = SDOG_INFO, nr_vnodes = SD_DEFAULT_VNODES;
 	const char *dirp = DEFAULT_OBJECT_DIR, *short_options;
 	char *dir, *p, *pid_file = NULL, *bindaddr = NULL, path[PATH_MAX],
@@ -563,22 +542,6 @@ int main(int argc, char **argv)
 		case 'w':
 			object_cache_set(optarg);
 			break;
-		case 'i':
-			parse_arg(optarg, ",", init_io_arg);
-			if (!str_to_addr(io_addr, sys->this_node.nid.io_addr)) {
-				fprintf(stderr, "Bad addr: '%s'\n",
-					io_addr);
-				exit(1);
-			}
-
-			if (io_pt)
-				if (sscanf(io_pt, "%u", &io_port) != 1) {
-					fprintf(stderr, "Bad port '%s'\n",
-						io_pt);
-					exit(1);
-				}
-			sys->this_node.nid.io_port = io_port;
-			break;
 		case 'j':
 			uatomic_set_true(&sys->use_journal);
 			parse_arg(optarg, ",", init_journal_arg);
@@ -664,9 +627,6 @@ int main(int argc, char **argv)
 
 	ret = create_listen_port(bindaddr, port);
 	if (ret)
-		exit(1);
-
-	if (io_addr && create_listen_port(io_addr, io_port))
 		exit(1);
 
 	ret = init_unix_domain_socket(dir);

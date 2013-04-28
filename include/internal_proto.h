@@ -113,9 +113,6 @@
 struct node_id {
 	uint8_t addr[16];
 	uint16_t port;
-	uint8_t io_addr[16];
-	uint16_t io_port;
-	uint8_t pad[4];
 };
 
 struct sd_node {

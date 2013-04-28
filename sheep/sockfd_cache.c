@@ -340,18 +340,12 @@ static inline void check_idx(int idx)
 /* Add the node back if it is still alive */
 static inline int revalidate_node(const struct node_id *nid)
 {
-	bool use_io = nid->io_port ? true : false;
 	int fd;
 
-	if (use_io) {
-		fd = connect_to_addr(nid->io_addr, nid->io_port);
-		if (fd >= 0)
-			goto alive;
-	}
 	fd = connect_to_addr(nid->addr, nid->port);
 	if (fd < 0)
 		return false;
-alive:
+
 	close(fd);
 	sockfd_cache_add(nid);
 	return true;
@@ -362,10 +356,9 @@ static struct sockfd *sockfd_cache_get(const struct node_id *nid)
 {
 	struct sockfd_cache_entry *entry;
 	struct sockfd *sfd;
-	bool use_io = nid->io_port ? true : false;
-	const uint8_t *addr = use_io ? nid->io_addr : nid->addr;
+	const uint8_t *addr = nid->addr;
 	char name[INET6_ADDRSTRLEN];
-	int fd, idx, port = use_io ? nid->io_port : nid->port;
+	int fd, idx, port = nid->port;
 
 	addr_to_str(name, sizeof(name), addr, 0);
 grab:
@@ -392,16 +385,10 @@ grab:
 	sd_dprintf("create cache connection %s:%d idx %d", name, port, idx);
 	fd = connect_to(name, port);
 	if (fd < 0) {
-		if (use_io) {
-			sd_eprintf("fallback to non-io connection");
-			fd = connect_to_addr(nid->addr, nid->port);
-			if (fd >= 0)
-				goto new;
-		}
 		uatomic_set_false(&entry->fds[idx].in_use);
 		return NULL;
 	}
-new:
+
 	entry->fds[idx].fd = fd;
 out:
 	sfd = xmalloc(sizeof(*sfd));
@@ -412,9 +399,8 @@ out:
 
 static void sockfd_cache_put(const struct node_id *nid, int idx)
 {
-	bool use_io = nid->io_port ? true : false;
-	const uint8_t *addr = use_io ? nid->io_addr : nid->addr;
-	int port = use_io ? nid->io_port : nid->port;
+	const uint8_t *addr =  nid->addr;
+	int port = nid->port;
 	struct sockfd_cache_entry *entry;
 	char name[INET6_ADDRSTRLEN];
 
@@ -430,9 +416,8 @@ static void sockfd_cache_put(const struct node_id *nid, int idx)
 
 static void sockfd_cache_close(const struct node_id *nid, int idx)
 {
-	bool use_io = nid->io_port ? true : false;
-	const uint8_t *addr = use_io ? nid->io_addr : nid->addr;
-	int port = use_io ? nid->io_port : nid->port;
+	const uint8_t *addr = nid->addr;
+	int port = nid->port;
 	struct sockfd_cache_entry *entry;
 	char name[INET6_ADDRSTRLEN];
 
