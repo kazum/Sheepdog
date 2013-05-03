@@ -47,6 +47,10 @@ struct recovery_obj_work {
 
 	uint64_t oid; /* the object to be recovered */
 	bool stop;
+
+	/* local replica in the stale directory */
+	uint32_t local_epoch;
+	uint8_t local_sha1[SHA1_LEN];
 };
 
 /*
@@ -99,22 +103,10 @@ static int obj_cmp(const void *oid1, const void *oid2)
 	return 0;
 }
 
-/*
- * A virtual node that does not match any node in current node list
- * means the node has left the cluster, then it's an invalid virtual node.
- */
-static bool is_invalid_vnode(const struct sd_vnode *entry,
-			     struct sd_node *nodes, int nr_nodes)
-{
-	if (bsearch(entry, nodes, nr_nodes, sizeof(struct sd_node),
-		    node_id_cmp))
-		return false;
-	return true;
-}
-
 static int recover_object_from_replica(uint64_t oid, struct vnode_info *old,
 				       struct vnode_info *cur,
-				       uint32_t epoch, uint32_t tgt_epoch)
+				       uint32_t epoch, uint32_t tgt_epoch,
+				       uint32_t local_epoch, uint8_t *sha1)
 {
 	struct sd_req hdr;
 	struct sd_rsp *rsp = (struct sd_rsp *)&hdr;
@@ -148,15 +140,31 @@ static int recover_object_from_replica(uint64_t oid, struct vnode_info *old,
 
 		vnode = oid_to_vnode(old->vnodes, old->nr_vnodes, oid, idx);
 
-		if (is_invalid_vnode(vnode, cur->nodes, cur->nr_nodes))
-			continue;
-
 		if (vnode_is_local(vnode)) {
 			if (tgt_epoch < sys_epoch())
 				ret = sd_store->link(oid, tgt_epoch);
 			else
 				ret = SD_RES_NO_OBJ;
 		} else {
+			/* compare sha1 hash value first */
+			if (local_epoch > 0) {
+				sd_init_req(&hdr, SD_OP_GET_HASH);
+				hdr.obj.oid = oid;
+				hdr.obj.tgt_epoch = tgt_epoch;
+				ret = sheep_exec_req(&vnode->nid, &hdr, NULL);
+				if (ret != SD_RES_SUCCESS)
+					goto out;
+				if (memcmp(rsp->hash.digest, sha1,
+					   sizeof(SHA1_LEN)) == 0) {
+					sd_dprintf("use local replica "
+						   "at epoch %d", local_epoch);
+					ret = sd_store->link(oid, local_epoch);
+					if (ret == SD_RES_SUCCESS)
+						goto out;
+				}
+			}
+
+			/* recover from remote replica */
 			sd_init_req(&hdr, SD_OP_READ_PEER);
 			hdr.epoch = epoch;
 			hdr.flags = SD_FLAG_CMD_RECOVERY;
@@ -216,6 +224,8 @@ static int do_recover_object(struct recovery_obj_work *row)
 	struct vnode_info *old, *cur;
 	uint64_t oid = row->oid;
 	uint32_t epoch = rw->epoch, tgt_epoch = rw->epoch;
+	uint32_t local_epoch = row->local_epoch;
+	uint8_t *sha1 = row->local_sha1;
 	int ret;
 	struct vnode_info *new_old;
 
@@ -225,7 +235,8 @@ again:
 	sd_dprintf("try recover object %"PRIx64" from epoch %"PRIu32, oid,
 		   tgt_epoch);
 
-	ret = recover_object_from_replica(oid, old, cur, epoch, tgt_epoch);
+	ret = recover_object_from_replica(oid, old, cur, epoch, tgt_epoch,
+					  local_epoch, sha1);
 
 	switch (ret) {
 	case SD_RES_SUCCESS:
@@ -276,13 +287,21 @@ static void recover_object_work(struct work *work)
 						     struct recovery_obj_work,
 						     base);
 	uint64_t oid = row->oid;
-	int ret;
+	int ret, epoch;
 
 	if (sd_store->exist(oid)) {
 		sd_dprintf("the object is already recovered");
 		return;
 	}
 
+	for (epoch = sys_epoch() - 1; epoch > 0; epoch--) {
+		ret = sd_store->get_hash(oid, epoch, row->local_sha1);
+		if (ret == SD_RES_SUCCESS) {
+			sd_dprintf("replica found in local at epoch %d", epoch);
+			row->local_epoch = epoch;
+			break;
+		}
+	}
 	ret = do_recover_object(row);
 	if (ret < 0)
 		sd_eprintf("failed to recover object %"PRIx64, oid);
