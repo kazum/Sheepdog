@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #include "collie.h"
 #include "treeview.h"
@@ -1439,6 +1440,71 @@ static void write_object_to(const struct sd_vnode *vnode, uint64_t oid,
 	}
 }
 
+struct vdi_hash_info {
+	pthread_t thread;
+	uint64_t oid;
+	struct node_id nid;
+	bool success;
+	uint8_t hash[SHA1_LEN];
+};
+
+static void *get_hash(void *arg)
+{
+	struct vdi_hash_info *info = arg;
+	int ret;
+	char host[HOST_NAME_MAX];
+	struct sd_req hdr;
+	struct sd_rsp *rsp = (struct sd_rsp *)&hdr;
+
+	sd_init_req(&hdr, SD_OP_GET_HASH);
+	hdr.obj.oid = info->oid;
+	hdr.obj.tgt_epoch = sd_epoch;
+
+	addr_to_str(host, sizeof(host), info->nid.addr, 0);
+	ret = collie_exec_req(host, info->nid.port, &hdr, NULL);
+
+	memcpy(info->hash, rsp->hash.digest, sizeof(info->hash));
+	info->success = (ret == 0);
+
+	return NULL;
+}
+
+/* check the need of repair with hash */
+static bool need_repair(uint64_t oid, const struct sd_vnode **vnodes,
+			int nr_copies)
+{
+	struct vdi_hash_info info[SD_MAX_COPIES];
+	bool success = true;
+
+	for (int i = 0; i < nr_copies; i++) {
+		int ret;
+
+		info[i].oid = oid;
+		info[i].nid = vnodes[i]->nid;
+		ret = pthread_create(&info[i].thread, NULL, get_hash, info + i);
+		if (ret != 0) {
+			fprintf(stderr, "failed to create thread\n");
+			success = false;
+		}
+	}
+
+	for (int i = 0; i < nr_copies; i++) {
+		pthread_join(info[i].thread, NULL);
+		success = success && info[i].success;
+	}
+
+	if (!success)
+		return true;
+
+	for (int i = 1; i < nr_copies; i++) {
+		if (memcmp(info[0].hash, info[i].hash, sizeof(info[0].hash)) != 0)
+			return true;
+	}
+
+	/* all the replicas have the same contents */
+	return false;
+}
+
 /*
  * Fix consistency of the replica of oid.
  *
@@ -1449,16 +1515,21 @@ static void do_check_repair(uint64_t oid, int nr_copies)
 {
 	const struct sd_vnode *tgt_vnodes[SD_MAX_COPIES];
 	size_t size = get_objsize(oid);
-	void *buf = xmalloc(size), *buf_cmp;
+	void *buf, *buf_cmp;
 	int i, ret;
 
+	oid_to_vnodes(sd_vnodes, sd_vnodes_nr, oid, nr_copies, tgt_vnodes);
+
+	if (!need_repair(oid, tgt_vnodes, nr_copies))
+		return;
+
+	buf = xmalloc(size);
 	ret = sd_read_object(oid, buf, size, 0, true);
 	if (ret != SD_RES_SUCCESS) {
 		fprintf(stderr, "FATAL: read %"PRIx64" failed\n", oid);
 		exit(EXIT_FAILURE);
 	}
 
-	oid_to_vnodes(sd_vnodes, sd_vnodes_nr, oid, nr_copies, tgt_vnodes);
 	for (i = 0; i < nr_copies; i++) {
 		buf_cmp = read_object_from(tgt_vnodes[i], oid);
 		if (!buf_cmp) {
