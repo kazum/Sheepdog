@@ -103,17 +103,72 @@ static int obj_cmp(const void *oid1, const void *oid2)
 	return 0;
 }
 
+static int recover_object_from(uint64_t oid, const struct sd_vnode *vnode,
+			       uint32_t epoch, uint32_t tgt_epoch,
+			       uint32_t local_epoch, uint8_t *sha1)
+{
+	int ret;
+	unsigned rlen;
+	void *buf = NULL;
+	struct sd_req hdr;
+	struct sd_rsp *rsp = (struct sd_rsp *)&hdr;
+	struct siocb iocb = { 0 };
+
+	if (vnode_is_local(vnode)) {
+		if (tgt_epoch < sys_epoch())
+			return sd_store->link(oid, tgt_epoch);
+
+		return SD_RES_NO_OBJ;
+	}
+
+	/* compare sha1 hash value first */
+	if (local_epoch > 0) {
+		sd_init_req(&hdr, SD_OP_GET_HASH);
+		hdr.obj.oid = oid;
+		hdr.obj.tgt_epoch = tgt_epoch;
+		ret = sheep_exec_req(&vnode->nid, &hdr, NULL);
+		if (ret != SD_RES_SUCCESS)
+			return ret;
+
+		if (memcmp(rsp->hash.digest, sha1, sizeof(SHA1_LEN)) == 0) {
+			sd_dprintf("use local replica at epoch %d",
+				   local_epoch);
+			ret = sd_store->link(oid, local_epoch);
+			if (ret == SD_RES_SUCCESS)
+				return ret;
+		}
+	}
+
+	rlen = get_objsize(oid);
+	buf = xvalloc(rlen);
+
+	/* recover from remote replica */
+	sd_init_req(&hdr, SD_OP_READ_PEER);
+	hdr.epoch = epoch;
+	hdr.flags = SD_FLAG_CMD_RECOVERY;
+	hdr.data_length = rlen;
+	hdr.obj.oid = oid;
+	hdr.obj.tgt_epoch = tgt_epoch;
+
+	ret = sheep_exec_req(&vnode->nid, &hdr, buf);
+	if (ret == SD_RES_SUCCESS) {
+		iocb.epoch = epoch;
+		iocb.length = rsp->data_length;
+		iocb.offset = rsp->obj.offset;
+		iocb.buf = buf;
+		ret = sd_store->create_and_write(oid, &iocb);
+	}
+
+	free(buf);
+	return ret;
+}
+
 static int recover_object_from_replica(uint64_t oid, struct vnode_info *old,
 				       struct vnode_info *cur,
 				       uint32_t epoch, uint32_t tgt_epoch,
 				       uint32_t local_epoch, uint8_t *sha1)
 {
-	struct sd_req hdr;
-	struct sd_rsp *rsp = (struct sd_rsp *)&hdr;
-	unsigned rlen;
 	int nr_copies, ret = SD_RES_SUCCESS, start = 0;
-	void *buf = NULL;
-	struct siocb iocb = { 0 };
 	bool fully_replicated = true;
 
 	nr_copies = get_obj_copy_number(oid, old->nr_zones);
@@ -130,9 +185,6 @@ static int recover_object_from_replica(uint64_t oid, struct vnode_info *old,
 		}
 	}
 
-	rlen = get_objsize(oid);
-	buf = xvalloc(rlen);
-
 	/* Let's do a breadth-first search */
 	for (int i = 0; i < nr_copies; i++) {
 		const struct sd_vnode *vnode;
@@ -140,57 +192,17 @@ static int recover_object_from_replica(uint64_t oid, struct vnode_info *old,
 
 		vnode = oid_to_vnode(old->vnodes, old->nr_vnodes, oid, idx);
 
-		if (vnode_is_local(vnode)) {
-			if (tgt_epoch < sys_epoch())
-				ret = sd_store->link(oid, tgt_epoch);
-			else
-				ret = SD_RES_NO_OBJ;
-		} else {
-			/* compare sha1 hash value first */
-			if (local_epoch > 0) {
-				sd_init_req(&hdr, SD_OP_GET_HASH);
-				hdr.obj.oid = oid;
-				hdr.obj.tgt_epoch = tgt_epoch;
-				ret = sheep_exec_req(&vnode->nid, &hdr, NULL);
-				if (ret != SD_RES_SUCCESS)
-					goto out;
-				if (memcmp(rsp->hash.digest, sha1,
-					   sizeof(SHA1_LEN)) == 0) {
-					sd_dprintf("use local replica "
-						   "at epoch %d", local_epoch);
-					ret = sd_store->link(oid, local_epoch);
-					if (ret == SD_RES_SUCCESS)
-						goto out;
-				}
-			}
-
-			/* recover from remote replica */
-			sd_init_req(&hdr, SD_OP_READ_PEER);
-			hdr.epoch = epoch;
-			hdr.flags = SD_FLAG_CMD_RECOVERY;
-			hdr.data_length = rlen;
-			hdr.obj.oid = oid;
-			hdr.obj.tgt_epoch = tgt_epoch;
-
-			ret = sheep_exec_req(&vnode->nid, &hdr, buf);
-			if (ret == SD_RES_SUCCESS) {
-				iocb.epoch = epoch;
-				iocb.length = rsp->data_length;
-				iocb.offset = rsp->obj.offset;
-				iocb.buf = buf;
-				ret = sd_store->create_and_write(oid, &iocb);
-			}
-		}
-
+		ret = recover_object_from(oid, vnode, epoch, tgt_epoch,
+					  local_epoch, sha1);
 		switch (ret) {
 		case SD_RES_SUCCESS:
 			sd_dprintf("recovered oid %"PRIx64" from %d "
 				   "to epoch %d", oid, tgt_epoch, epoch);
 			objlist_cache_insert(oid);
-			goto out;
+			return ret;
 		case SD_RES_OLD_NODE_VER:
 			/* move to the next epoch recovery */
-			goto out;
+			return ret;
 		case SD_RES_NO_OBJ:
 			fully_replicated = false;
 			/* fall through */
@@ -208,8 +220,6 @@ static int recover_object_from_replica(uint64_t oid, struct vnode_info *old,
 	if (fully_replicated && ret != SD_RES_SUCCESS)
 		ret = SD_RES_STALE_OBJ;
 
-out:
-	free(buf);
 	return ret;
 }
 
