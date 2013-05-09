@@ -681,11 +681,13 @@ static void do_get_vdis(struct work *work)
 		container_of(work, struct get_vdis_work, work);
 	int i, ret;
 
-	switch (sys->status) {
-	case SD_STATUS_OK:
-	case SD_STATUS_HALT:
-		get_vdis_from(&w->joined);
-		return;
+	if (!node_eq(&w->joined, &sys->this_node)) {
+		switch (sys->status) {
+		case SD_STATUS_OK:
+		case SD_STATUS_HALT:
+			get_vdis_from(&w->joined);
+			return;
+		}
 	}
 
 	for (i = 0; i < w->nr_members; i++) {
