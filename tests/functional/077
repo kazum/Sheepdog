@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Test object reclaim
+seq=`basename $0`
+echo "QA output created by $seq"
+
+here=`pwd`
+tmp=/tmp/$$
+status=1        # failure is the default!
+
+# get standard environment, filters and checks
+. ./common.rc
+. ./common.filter
+
+_cleanup
+
+for i in 0 1 2; do
+    _start_sheep $i
+done
+_wait_for_sheep 3
+_cluster_format -c 2
+
+$DOG vdi create test 16M -P
+_node_info
+
+for i in `seq 0 3`; do
+    $DOG vdi snapshot test -s snap$i
+    $DOG vdi write test $((4 * 1024 ** 2 * $i)) 512 < /dev/zero
+    _node_info
+done
+
+for i in `seq 0 3`; do
+    $DOG vdi delete test -s snap$i
+    sleep 1
+    _node_info
+done
+
+$DOG vdi delete test
+sleep 1
+_node_info
