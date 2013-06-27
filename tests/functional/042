@@ -34,8 +34,8 @@ dd if=/dev/zero of=$STORE/3/zero > /dev/null 2>&1
 
 # test data write against disk-full cluster
 for i in `seq 0 10`; do
-    echo $i | $DOG vdi write test0 $((i * 4 * 1024 * 1024)) 512 -p 7000
-    echo $i | $DOG vdi write test1 $((i * 4 * 1024 * 1024)) 512 -p 7002
+    echo $i | _vdi_write test0 $((i * 4 * 1024 * 1024)) 512 -p 7000
+    echo $i | _vdi_write test1 $((i * 4 * 1024 * 1024)) 512 -p 7002
 done
 
 # test vdi creation against disk-full cluster

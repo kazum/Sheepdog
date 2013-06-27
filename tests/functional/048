@@ -16,7 +16,7 @@ _cluster_format
 
 $DOG vdi create test 1G
 
-echo hello | $DOG vdi write test 4M 512
+echo hello | _vdi_write test 4M 512
 # kill the master gracefully
 $DOG node kill 0
 sleep 2

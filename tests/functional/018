@@ -4,6 +4,8 @@
 
 . ./common
 
+_requirement writeback
+
 for i in `seq 0 2`; do
     _start_sheep $i "-w size=100"
 done
@@ -14,7 +16,7 @@ _cluster_format -c 2
 
 $DOG vdi create test 4M
 
-_random | $DOG vdi write -w test
+_random | _vdi_write test
 
 $DOG vdi cache flush test
 

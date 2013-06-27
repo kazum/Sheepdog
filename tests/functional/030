@@ -16,8 +16,8 @@ _cluster_format -c 3
 $DOG vdi create test1 10M
 $DOG vdi create test2 10M
 
-_random | $DOG vdi write test1
-_random | $DOG vdi write test2
+_random | _vdi_write test1
+_random | _vdi_write test2
 $DOG vdi read test1 | md5sum > $STORE/csum.11.org
 $DOG vdi read test2 | md5sum > $STORE/csum.21.org
 $DOG vdi snapshot test1
@@ -25,8 +25,8 @@ $DOG vdi snapshot test2
 $DOG cluster snapshot save s1 $TMPDIR
 $DOG cluster snapshot list $TMPDIR | _filter_date
 
-_random | $DOG vdi write test1
-_random | $DOG vdi write test2
+_random | _vdi_write test1
+_random | _vdi_write test2
 $DOG vdi read test1 | md5sum > $STORE/csum.12.org
 $DOG vdi read test2 | md5sum > $STORE/csum.22.org
 $DOG vdi snapshot test1

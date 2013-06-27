@@ -146,6 +146,8 @@ check options
     -dio                use direct IO for sheep backend store
     -xdiff		graphical mode diff
     -md                 enable md for backend
+    -writethrough       use writethrough mode
+    -direct             bypass object cache
     -e			exit immediately on test failure
     -n			show me, do not run tests
     -T			output timestamps
@@ -172,6 +174,16 @@ testlist options
 
 	-md)
 	    MD=true
+	    xpand=false
+	    ;;
+
+	-writethrough)
+	    CACHE=writethourgh
+	    xpand=false
+	    ;;
+
+	-direct)
+	    CACHE=direct
 	    xpand=false
 	    ;;
 

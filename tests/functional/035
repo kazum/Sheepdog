@@ -23,7 +23,7 @@ _wait_for_sheep 6
 _cluster_format -c 3
 
 $DOG vdi create test 40M
-_random | $DOG vdi write test &
+_random | _vdi_write test &
 
 sleep 3
 # Test write timeout

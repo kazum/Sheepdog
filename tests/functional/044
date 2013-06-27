@@ -16,15 +16,15 @@ $DOG vdi create base2 20M -p 7001
 $DOG vdi create base3 20M -p 7002
 
 for i in `seq 0 4`; do
-    echo $i | $DOG vdi write base1 $((i * 4 * 1024 * 1024)) 512
+    echo $i | _vdi_write base1 $((i * 4 * 1024 * 1024)) 512
 done &
 
 for i in `seq 0 4`; do
-    echo $i | $DOG vdi write base2 $((i * 4 * 1024 * 1024)) 512
+    echo $i | _vdi_write base2 $((i * 4 * 1024 * 1024)) 512
 done &
 
 for i in `seq 0 4`; do
-    echo $i | $DOG vdi write base3 $((i * 4 * 1024 * 1024)) 512
+    echo $i | _vdi_write base3 $((i * 4 * 1024 * 1024)) 512
 done &
 
 wait

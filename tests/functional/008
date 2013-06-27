@@ -17,7 +17,7 @@ for i in `seq 0 4`; do
 done
 
 for i in `seq 0 4`; do
-    _random | $DOG vdi write test$i -p 7000 &
+    _random | _vdi_write test$i -p 7000 &
 done
 
 sleep 3
@@ -35,6 +35,10 @@ _wait_for_sheep_recovery 0
 
 for i in `seq 1 5`; do
     _start_sheep $i
+done
+
+for i in `seq 0 4`; do
+    $DOG vdi cache flush test$i
 done
 
 echo wait for object recovery to finish

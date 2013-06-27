@@ -41,6 +41,21 @@ _check_md()
     $MD
 }
 
+_check_writeback()
+{
+    [ "$CACHE" = "writeback" ]
+}
+
+_check_writethrough()
+{
+    [ "$CACHE" = "writethrough" ]
+}
+
+_check_direct()
+{
+    [ "$CACHE" = "direct" ]
+}
+
 _requirement()
 {
     local arg
@@ -334,7 +349,8 @@ _start_sheep()
 	MD_STORE=",$STORE/$1/d0,$STORE/$1/d1,$STORE/$1/d2"
     fi
 
-    $SHEEP $STORE/$1$MD_STORE -z $1 -p $((7000+$1)) -c $DRIVER $SHEEP_OPTIONS $2
+    $SHEEP $STORE/$1$MD_STORE -z $1 -p $((7000+$1)) -c $DRIVER $SHEEP_OPTIONS \
+	$SHEEP_EXTRA_OPTIONS $2
 
     if [ $? != 0 ]; then
         _die "cannot start sheep $1"
@@ -538,6 +554,27 @@ _vdi_list()
 {
 	local args=$*
 	$DOG vdi list $args | _filter_short_date
+}
+
+_vdi_write()
+{
+    local opts=""
+
+    if [ "$CACHE" = "writeback" ]; then
+	opts="-w"
+    fi
+    $DOG vdi write $opts "$@"
+}
+
+_qemu_io()
+{
+    local opts=""
+
+    if [ "$CACHE" != "" ]; then
+	opts="-t $CACHE"
+    fi
+
+    $QEMU_IO $opts "$@" | _filter_qemu_io
 }
 
 # make sure this script returns success

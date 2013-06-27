@@ -24,7 +24,7 @@ _input()
     echo quit
 }
 
-_input | $QEMU_IO sheepdog:test > /dev/null
+_input | _qemu_io sheepdog:test > /dev/null
 
 _vdi_list
 $DOG vdi tree | _filter_short_date

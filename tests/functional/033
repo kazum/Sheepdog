@@ -17,7 +17,7 @@ _cluster_format
 $DOG vdi create test 100MB
 # create 25 objects
 for i in `seq 0 24`; do
-    echo $i | $DOG vdi write test $((i * 4 * 1024 * 1024)) 512
+    echo $i | _vdi_write test $((i * 4 * 1024 * 1024)) 512
 done
 
 $DOG vdi read test | md5sum
@@ -48,6 +48,8 @@ for i in `seq 1 7`; do
 done
 
 _wait_for_sheep_recovery 0
+
+$DOG vdi cache flush test
 
 ls $STORE/*/obj/807c2b2500000000 | _filter_store | sort
 for i in `seq 0 24`; do

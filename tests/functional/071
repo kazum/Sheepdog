@@ -25,7 +25,7 @@ for skip in 0 1 2 3; do
     for offset in 0 512; do
 	for length in $((4 * 4096)) $((4 * 4096 - 512)); do
 	    dd if=$DATA_FILE bs=4k skip=$skip count=4 2> /dev/null \
-		| $DOG vdi write test $offset $length
+		| _vdi_write test $offset $length
 
 	    $DOG vdi read test $offset $length | hd
 	done

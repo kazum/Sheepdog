@@ -17,8 +17,9 @@ _cluster_format
 $DOG vdi create test 40M
 
 for i in `seq 0 10`; do
-    echo $i | $DOG vdi write test $((i * 4 * 1024 * 1024)) 512
+    echo $i | _vdi_write test $((i * 4 * 1024 * 1024)) 512
 done
+$DOG vdi cache flush test
 
 for i in 0 1 2 3 4; do
     $DOG vdi read test -p 700$i | md5sum
@@ -29,8 +30,9 @@ done
 _safe_remove $STORE/4/obj
 
 for i in `seq 0 10`; do
-    echo $(($i + 100)) | $DOG vdi write test $((i * 4 * 1024 * 1024)) 512
+    echo $(($i + 100)) | _vdi_write test $((i * 4 * 1024 * 1024)) 512
 done
+$DOG vdi cache flush test
 
 for i in 0 1 2 3 4; do
     $DOG vdi read test -p 700$i | md5sum
@@ -41,8 +43,9 @@ done
 _kill_sheep 3
 
 for i in `seq 0 10`; do
-    echo $(($i + 200)) | $DOG vdi write test $((i * 4 * 1024 * 1024)) 512
+    echo $(($i + 200)) | _vdi_write test $((i * 4 * 1024 * 1024)) 512
 done
+$DOG vdi cache flush test
 
 for i in 0 1 2 4; do
     $DOG vdi read test -p 700$i | md5sum
@@ -58,4 +61,4 @@ done
 
 # check whether we can write to a gateway after EIO
 _safe_remove $STORE/0/obj
-echo hello | $DOG vdi write test 0 512
+echo hello | _vdi_write test 0 512

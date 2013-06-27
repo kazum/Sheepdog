@@ -14,7 +14,7 @@ _cluster_format -c 2
 $DOG vdi create test 4M
 
 for i in `seq 0 7`; do
-    echo $i | $DOG vdi write test $(($i * 1536 + 512)) 512
+    echo $i | _vdi_write test $(($i * 1536 + 512)) 512
 done
 
 for i in `seq 0 7`; do

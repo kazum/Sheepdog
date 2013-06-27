@@ -15,9 +15,9 @@ $DOG vdi create t 300M -P
 $DOG vdi create t0 300M -P
 $DOG vdi create t1 300M -P
 
-dd if=/dev/zero | $DOG vdi write -w t &
+dd if=/dev/zero | _vdi_write t &
 for j in 0 1; do
-    dd if=/dev/zero | $DOG vdi write -w t$j -p 700$j &
+    dd if=/dev/zero | _vdi_write t$j -p 700$j &
 done
 
 for i in `seq 3 7`; do

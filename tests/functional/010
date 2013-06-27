@@ -19,8 +19,9 @@ $DOG vdi create test 4G
 
 # create 8 objects
 for i in `seq 0 7`; do
-    echo $i | $DOG vdi write test $((i * 4 * 1024 * 1024)) 512
+    echo $i | _vdi_write test $((i * 4 * 1024 * 1024)) 512
 done
+$DOG vdi cache flush test
 
 ls $STORE/*/obj/* | _filter_store | sort
 
@@ -34,8 +35,9 @@ ls $STORE/*/obj/* | _filter_store | sort
 # overwrite the objects to invoke object recovery
 for i in `seq 4 7`; do
     $DOG vdi read test $((i * 4 * 1024 * 1024)) 512 | md5sum
-    echo $(($i + 100)) | $DOG vdi write test $((i * 4 * 1024 * 1024)) 512
+    echo $(($i + 100)) | _vdi_write test $((i * 4 * 1024 * 1024)) 512
 done
+$DOG vdi cache flush test
 
 $DOG cluster info | head -6 | _filter_cluster_info
 ls $STORE/*/obj/* | _filter_store | sort
@@ -58,7 +60,8 @@ ls $STORE/*/obj/* | _filter_store | sort
 # overwrite the objects to invoke object recovery
 for i in `seq 0 3`; do
     $DOG vdi read test $((i * 4 * 1024 * 1024)) 512 -p 7007 | md5sum
-    echo $(($i + 200)) | $DOG vdi write test $((i * 4 * 1024 * 1024)) 512
+    echo $(($i + 200)) | _vdi_write test $((i * 4 * 1024 * 1024)) 512
+    $DOG vdi cache flush test
 done
 
 $DOG cluster info | head -6 | _filter_cluster_info

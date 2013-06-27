@@ -15,14 +15,14 @@ $DOG vdi create test 200M -P
 
 # simulate one disk failure
 _safe_remove $STORE/0/d0
-_random | $DOG vdi write test
+_random | _vdi_write test
 _wait_for_sheep_recovery 0
 $DOG vdi check test
 $DOG cluster info | _filter_cluster_info
 
 # simulate multiple disk failure
 _safe_remove $STORE/1/d0
-_random | $DOG vdi write test &
+_random | _vdi_write test &
 sleep 1
 _safe_remove $STORE/1/d1
 _wait_for_sheep_recovery 0
@@ -32,13 +32,13 @@ $DOG cluster info | _filter_cluster_info
 
 # simulate all disks failure
 _safe_remove $STORE/1/d2
-_random | $DOG vdi write test
+_random | _vdi_write test
 $DOG vdi check test
 $DOG cluster info | _filter_cluster_info
 
 # simulate simultaneous multiple disks failure
 _safe_remove $STORE/2/d0
 _safe_remove $STORE/2/d1
-dd if=/dev/zero | $DOG vdi write test
+dd if=/dev/zero | _vdi_write test
 $DOG vdi check test
 $DOG cluster info | _filter_cluster_info

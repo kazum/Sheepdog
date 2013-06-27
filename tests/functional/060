@@ -15,7 +15,7 @@ for i in `seq 0 3`; do
     $DOG vdi create test$i 100M
 
     for j in `seq 0 24`; do
-	echo "$i $j" | $DOG vdi write test$i $(($j * 4 * 1024 ** 2)) 512
+	echo "$i $j" | _vdi_write test$i $(($j * 4 * 1024 ** 2)) 512
     done &
 done
 wait
@@ -42,6 +42,10 @@ _reboot_without_dog_shutdown()
 
 for i in 0 1 2; do
     _reboot_without_dog_shutdown
+done
+
+for i in `seq 0 3`; do
+    $DOG vdi cache flush test$i
 done
 
 for i in `seq 0 7`; do

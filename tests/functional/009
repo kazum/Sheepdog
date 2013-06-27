@@ -20,10 +20,12 @@ $DOG vdi create test 80M -P
 _kill_sheep 2
 
 # write data to the vdi
-_random | $DOG vdi write test
+_random | _vdi_write test
 
 # restart the 3rd node
 _start_sheep 2
+
+$DOG vdi cache flush test
 
 _wait_for_sheep_recovery 0
 
