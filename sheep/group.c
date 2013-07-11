@@ -458,7 +458,8 @@ static int cluster_wait_check(const struct sd_node *joining,
 	return sys->status;
 }
 
-static int get_vdis_from(struct sd_node *node)
+/* return true if we get a complete vdi bitmap */
+static bool get_vdis_from(uint32_t epoch, struct sd_node *node)
 {
 	struct sd_req hdr;
 	struct sd_rsp *rsp = (struct sd_rsp *)&hdr;
@@ -466,6 +467,7 @@ static int get_vdis_from(struct sd_node *node)
 	int i, ret = SD_RES_SUCCESS;
 	unsigned int rlen;
 	int count;
+	bool complete_bmap = false;
 
 	if (node_is_local(node))
 		goto out;
@@ -474,10 +476,28 @@ static int get_vdis_from(struct sd_node *node)
 	vs = xzalloc(rlen);
 	sd_init_req(&hdr, SD_OP_GET_VDI_COPIES);
 	hdr.data_length = rlen;
-	hdr.epoch = sys_epoch();
+	/*
+	 * Check whether the target node has already called against all the
+	 * existing nodes at (epoch - 1).
+	 */
+	hdr.obj.tgt_epoch = epoch - 1;
 	ret = sheep_exec_req(&node->nid, &hdr, (char *)vs);
-	if (ret != SD_RES_SUCCESS)
+	switch (ret) {
+	case SD_RES_SUCCESS:
+		complete_bmap = true;
+		break;
+	case SD_RES_NEW_NODE_VER:
+		/*
+		 * The target node didn't have a complete vdi bitmap.  This node
+		 * needs to call get_vdi_from() against other nodes, too.
+		 */
+		complete_bmap = false;
+		break;
+	default:
+		sd_printf(SDOG_ALERT, "failed to get vdi bitmap from %s, %s",
+			  node_to_str(node), sd_strerror(ret));
 		goto out;
+	}
 
 	count = rsp->data_length / sizeof(*vs);
 	for (i = 0; i < count; i++) {
@@ -486,22 +506,19 @@ static int get_vdis_from(struct sd_node *node)
 	}
 out:
 	free(vs);
-	return ret;
+	return complete_bmap;
 }
 
 static void do_get_vdis(struct work *work)
 {
 	struct get_vdis_work *w =
 		container_of(work, struct get_vdis_work, work);
-	int i, ret;
+	int i;
 
 	if (!node_is_local(&w->joined)) {
 		sd_dprintf("try to get vdi bitmap from %s",
 			   node_to_str(&w->joined));
-		ret = get_vdis_from(&w->joined);
-		if (ret != SD_RES_SUCCESS)
-			sd_printf(SDOG_ALERT, "failed to get vdi bitmap from "
-				  "%s", node_to_str(&w->joined));
+		get_vdis_from(w->epoch, &w->joined);
 		return;
 	}
 
@@ -512,19 +529,17 @@ static void do_get_vdis(struct work *work)
 
 		sd_dprintf("try to get vdi bitmap from %s",
 			   node_to_str(&w->members[i]));
-		ret = get_vdis_from(&w->members[i]);
-		if (ret != SD_RES_SUCCESS) {
-			/* try to read from another node */
-			sd_printf(SDOG_ALERT, "failed to get vdi bitmap from "
-				  "%s", node_to_str(&w->members[i]));
-			continue;
-		}
-
-		/*
-		 * TODO: If the target node has a valid vdi bitmap (the node has
-		 * already called do_get_vdis against all the nodes), we can
-		 * exit this loop here.
-		 */
+		if (get_vdis_from(w->epoch, &w->members[i])) {
+			/*
+			 * If the target node has a valid vdi bitmap (the node
+			 * has already called do_get_vdis against all the
+			 * nodes), we can exit this loop here.
+			 */
+			sd_dprintf("%s has a complete bitmap",
+				   node_to_str(&w->members[i]));
+			break;
+		} else
+			sd_dprintf("next");
 	}
 }
 
@@ -655,6 +670,17 @@ void wait_get_vdis_done(uint32_t epoch)
 	pthread_mutex_unlock(&wait_vdis_lock);
 
 	sd_dprintf("vdi list ready");
+}
+
+uint32_t get_vdi_list_epoch(void)
+{
+	uint32_t epoch;
+	pthread_mutex_lock(&wait_vdis_lock);
+	epoch = vdi_list_epoch;
+	pthread_cond_broadcast(&wait_vdis_cond);
+	pthread_mutex_unlock(&wait_vdis_lock);
+
+	return epoch;
 }
 
 void recalculate_vnodes(struct sd_node *nodes, int nr_nodes)

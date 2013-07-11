@@ -281,6 +281,7 @@ struct vnode_info *get_vnode_info_epoch(uint32_t epoch,
 void get_vdis(const struct sd_node *nodes, size_t nr_nodes,
 	      const struct sd_node *joined);
 void wait_get_vdis_done(uint32_t epoch);
+uint32_t get_vdi_list_epoch(void);
 
 int get_nr_copies(struct vnode_info *vnode_info);
 

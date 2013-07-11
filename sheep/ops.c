@@ -376,7 +376,15 @@ static int local_read_vdis(const struct sd_req *req, struct sd_rsp *rsp,
 static int local_get_vdi_copies(const struct sd_req *req, struct sd_rsp *rsp,
 			   void *data)
 {
+	uint32_t vdi_bitmap_epoch = get_vdi_list_epoch();
+
 	rsp->data_length = fill_vdi_state_list(data);
+
+	sd_dprintf("local vdi epoch %" PRId32 ", remote vdi epoch %" PRId32,
+		   vdi_bitmap_epoch, req->obj.tgt_epoch);
+	if (vdi_bitmap_epoch < req->obj.tgt_epoch)
+		/* The caller has to get a vdi bitmap from other nodes, too. */
+		return SD_RES_NEW_NODE_VER;
 
 	return SD_RES_SUCCESS;
 }
