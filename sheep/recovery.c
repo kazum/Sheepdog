@@ -755,7 +755,7 @@ static void prepare_object_list(struct work *work)
 		return;
 
 	sd_dprintf("%u", rw->epoch);
-	wait_get_vdis_done();
+	wait_get_vdis_done(rw->epoch);
 again:
 	/* We need to start at random node for better load balance */
 	for (i = start; i < end; i++) {

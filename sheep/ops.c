@@ -269,6 +269,8 @@ static int cluster_make_fs(const struct sd_req *req, struct sd_rsp *rsp,
 	else
 		sys->status = SD_STATUS_HALT;
 
+	get_vdis(NULL, 0, NULL);
+
 	return SD_RES_SUCCESS;
 }
 
@@ -554,6 +556,9 @@ static int cluster_force_recover_main(const struct sd_req *req,
 	start_recovery(vnode_info, old_vnode_info, true);
 	put_vnode_info(vnode_info);
 	put_vnode_info(old_vnode_info);
+
+	get_vdis(NULL, 0, NULL);
+
 	return ret;
 err:
 	panic("failed in force recovery");

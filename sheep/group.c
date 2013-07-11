@@ -18,6 +18,7 @@ struct node {
 
 struct get_vdis_work {
 	struct work work;
+	uint32_t epoch;
 	DECLARE_BITMAP(vdi_inuse, SD_NR_VDIS);
 	struct sd_node joined;
 	size_t nr_members;
@@ -26,7 +27,7 @@ struct get_vdis_work {
 
 static pthread_mutex_t wait_vdis_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t wait_vdis_cond = PTHREAD_COND_INITIALIZER;
-static bool is_vdi_list_ready = true;
+static uint32_t vdi_list_epoch;
 
 static main_thread(struct vnode_info *) current_vnode_info;
 static main_thread(struct list_head *) pending_block_list;
@@ -533,7 +534,7 @@ static void get_vdis_done(struct work *work)
 		container_of(work, struct get_vdis_work, work);
 
 	pthread_mutex_lock(&wait_vdis_lock);
-	is_vdi_list_ready = true;
+	vdi_list_epoch = w->epoch;
 	pthread_cond_broadcast(&wait_vdis_cond);
 	pthread_mutex_unlock(&wait_vdis_lock);
 
@@ -608,30 +609,48 @@ static void finish_join(const struct join_message *msg,
 	sockfd_cache_add_group(nodes, nr_nodes);
 }
 
-static void get_vdis(const struct sd_node *nodes, size_t nr_nodes,
-		     const struct sd_node *joined)
+void get_vdis(const struct sd_node *nodes, size_t nr_nodes,
+	      const struct sd_node *joined)
 {
 	int array_len = nr_nodes * sizeof(struct sd_node);
 	struct get_vdis_work *w;
 
+	if (sys->cinfo.epoch == 0)
+		/* There is no vdi bitmap in the cluster yet. */
+		return;
+
 	w = xmalloc(sizeof(*w) + array_len);
-	w->joined = *joined;
-	w->nr_members = nr_nodes;
-	memcpy(w->members, nodes, array_len);
+	switch (sys->status) {
+	case SD_STATUS_OK:
+	case SD_STATUS_HALT:
+		w->epoch = sys->cinfo.epoch;
+		break;
+	default:
+		/* Enough nodes at sys->cinfo.epoch are not gathered yet */
+		w->epoch = 0;
+		break;
+	}
+	if (joined) {
+		w->joined = *joined;
+		w->nr_members = nr_nodes;
+		memcpy(w->members, nodes, array_len);
 
-	is_vdi_list_ready = false;
+		w->work.fn = do_get_vdis;
+	} else
+		/* only update vdi bitmap epoch */
+		w->work.fn = NULL;
 
-	w->work.fn = do_get_vdis;
 	w->work.done = get_vdis_done;
 	queue_work(sys->block_wqueue, &w->work);
 }
 
-void wait_get_vdis_done(void)
+void wait_get_vdis_done(uint32_t epoch)
 {
 	sd_dprintf("waiting for vdi list");
 
 	pthread_mutex_lock(&wait_vdis_lock);
-	while (!is_vdi_list_ready)
+	/* wait until we get the vdi bitmap at last epoch */
+	while (vdi_list_epoch < epoch)
 		pthread_cond_wait(&wait_vdis_cond, &wait_vdis_lock);
 	pthread_mutex_unlock(&wait_vdis_lock);
 
@@ -684,8 +703,6 @@ static void update_cluster_info(const struct join_message *msg,
 	old_vnode_info = main_thread_get(current_vnode_info);
 	main_thread_set(current_vnode_info,
 			  alloc_vnode_info(nodes, nr_nodes));
-
-	get_vdis(nodes, nr_nodes, joined);
 
 	switch (msg->cluster_status) {
 	case SD_STATUS_OK:
@@ -951,6 +968,8 @@ void sd_accept_handler(const struct sd_node *joined,
 
 	update_cluster_info(jm, joined, members, nr_members);
 
+	get_vdis(members, nr_members, joined);
+
 	if (node_is_local(joined))
 		/* this output is used for testing */
 		sd_printf(SDOG_DEBUG, "join Sheepdog cluster");
@@ -994,6 +1013,8 @@ void sd_leave_handler(const struct sd_node *left, const struct sd_node *members,
 	put_vnode_info(old_vnode_info);
 
 	sockfd_cache_del(&left->nid);
+
+	get_vdis(NULL, 0, NULL);
 }
 
 static void update_node_size(struct sd_node *node)
@@ -1022,6 +1043,8 @@ void sd_update_node_handler(struct sd_node *node)
 {
 	update_node_size(node);
 	kick_node_recover();
+
+	get_vdis(NULL, 0, NULL);
 }
 
 int create_cluster(int port, int64_t zone, int nr_vnodes,
