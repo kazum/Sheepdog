@@ -41,6 +41,7 @@ sleep 3
 # Test write timeout
 for i in `seq 1 4`; do
 	_simulate_machine_down $i
+	_wait_for_sheep_recovery 0
 done
 
 # wait for collie to finish
@@ -63,6 +64,7 @@ _wait_for_sheep_recovery 0
 $COLLIE vdi read test | md5sum > $STORE/csum.2 &
 for i in `seq 5 7`; do
 	_simulate_machine_down $i
+	_wait_for_sheep_recovery 0
 done
 wait
 

@@ -355,7 +355,6 @@ _simulate_machine_down()
 	sleep 3
 	# Trigger the confchg because cluster driver doesn't know we'er offline
 	_kill_sheep $1
-	_wait_for_sheep_recovery 0
 }
 
 # Cleanup the iptables rules used to simulate machine down
