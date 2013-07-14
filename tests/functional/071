@@ -1,0 +1,89 @@
+#!/bin/bash
+
+# Test qemu reconnection
+
+seq=`basename $0`
+echo "QA output created by $seq"
+
+here=`pwd`
+tmp=/tmp/$$
+status=1        # failure is the default!
+
+trap "_uninit; exit \$status" 0 1 2 3 15
+
+# get standard environment, filters and checks
+. ./common.rc
+. ./common.filter
+
+_need_to_be_root
+
+_uninit()
+{
+    _cleanup_machine_simulation 0 2> /dev/null
+}
+
+_cleanup
+
+for i in `seq 0 3`; do
+    _start_sheep $i
+done
+
+_wait_for_sheep 4
+
+_cluster_format -c 3
+
+$COLLIE vdi create test 128M
+
+_reboot_sheep()
+{
+    sleep 1
+    _simulate_machine_down $1
+    sleep 1
+    _cleanup_machine_simulation $1
+    sleep 1
+    _start_sheep $1
+    _wait_for_sheep 4
+}
+
+obj_size=$((4 * 1024 ** 2))
+
+echo reconnection while qemu-io write
+for i in `seq 0 3`; do
+    cmd=()
+    for j in `seq 0 7`; do
+	idx=$(($i * 8 + $j))
+	offset=$(($idx * $obj_size))
+	cmd=("${cmd[@]}" -c "write -P $idx $offset $obj_size")
+    done
+    qemu-io "${cmd[@]}" sheepdog:test 2> /dev/null | _filter_qemu_io &
+done | sort &
+_reboot_sheep 0
+wait
+
+echo reconnection while qemu-io read
+for i in `seq 0 3`; do
+    cmd=()
+    for j in `seq 0 7`; do
+	idx=$(($i * 8 + $j))
+	offset=$(($idx * $obj_size))
+	cmd=("${cmd[@]}" -c "read -P $idx $offset $obj_size")
+    done
+    qemu-io "${cmd[@]}" sheepdog:test 2> /dev/null | _filter_qemu_io &
+done | sort &
+_reboot_sheep 0
+wait
+
+$COLLIE vdi read test | md5sum
+
+echo reconnection while qemu-img read
+qemu-img convert sheepdog:test $STORE/tmp.img 2> /dev/null &
+_reboot_sheep 0
+wait
+
+echo reconnection while qemu-img write
+qemu-img convert $STORE/tmp.img sheepdog:test2 2> /dev/null &
+_reboot_sheep 0
+wait
+
+$COLLIE vdi read test2 | md5sum
+status=0

@@ -141,6 +141,7 @@ _die()
 _cleanup()
 {
     local i
+    killall -9 qemu-io qemu-img 2> /dev/null
     _kill_all_collies
     _kill_all_sheeps
 

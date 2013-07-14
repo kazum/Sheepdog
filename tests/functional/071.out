@@ -1,0 +1,136 @@
+QA output created by 071
+using backend plain store
+reconnection while qemu-io write
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+wrote 4194304/4194304 bytes at offset 0
+wrote 4194304/4194304 bytes at offset 100663296
+wrote 4194304/4194304 bytes at offset 104857600
+wrote 4194304/4194304 bytes at offset 109051904
+wrote 4194304/4194304 bytes at offset 113246208
+wrote 4194304/4194304 bytes at offset 117440512
+wrote 4194304/4194304 bytes at offset 121634816
+wrote 4194304/4194304 bytes at offset 12582912
+wrote 4194304/4194304 bytes at offset 125829120
+wrote 4194304/4194304 bytes at offset 130023424
+wrote 4194304/4194304 bytes at offset 16777216
+wrote 4194304/4194304 bytes at offset 20971520
+wrote 4194304/4194304 bytes at offset 25165824
+wrote 4194304/4194304 bytes at offset 29360128
+wrote 4194304/4194304 bytes at offset 33554432
+wrote 4194304/4194304 bytes at offset 37748736
+wrote 4194304/4194304 bytes at offset 4194304
+wrote 4194304/4194304 bytes at offset 41943040
+wrote 4194304/4194304 bytes at offset 46137344
+wrote 4194304/4194304 bytes at offset 50331648
+wrote 4194304/4194304 bytes at offset 54525952
+wrote 4194304/4194304 bytes at offset 58720256
+wrote 4194304/4194304 bytes at offset 62914560
+wrote 4194304/4194304 bytes at offset 67108864
+wrote 4194304/4194304 bytes at offset 71303168
+wrote 4194304/4194304 bytes at offset 75497472
+wrote 4194304/4194304 bytes at offset 79691776
+wrote 4194304/4194304 bytes at offset 8388608
+wrote 4194304/4194304 bytes at offset 83886080
+wrote 4194304/4194304 bytes at offset 88080384
+wrote 4194304/4194304 bytes at offset 92274688
+wrote 4194304/4194304 bytes at offset 96468992
+reconnection while qemu-io read
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+4 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+read 4194304/4194304 bytes at offset 0
+read 4194304/4194304 bytes at offset 100663296
+read 4194304/4194304 bytes at offset 104857600
+read 4194304/4194304 bytes at offset 109051904
+read 4194304/4194304 bytes at offset 113246208
+read 4194304/4194304 bytes at offset 117440512
+read 4194304/4194304 bytes at offset 121634816
+read 4194304/4194304 bytes at offset 12582912
+read 4194304/4194304 bytes at offset 125829120
+read 4194304/4194304 bytes at offset 130023424
+read 4194304/4194304 bytes at offset 16777216
+read 4194304/4194304 bytes at offset 20971520
+read 4194304/4194304 bytes at offset 25165824
+read 4194304/4194304 bytes at offset 29360128
+read 4194304/4194304 bytes at offset 33554432
+read 4194304/4194304 bytes at offset 37748736
+read 4194304/4194304 bytes at offset 4194304
+read 4194304/4194304 bytes at offset 41943040
+read 4194304/4194304 bytes at offset 46137344
+read 4194304/4194304 bytes at offset 50331648
+read 4194304/4194304 bytes at offset 54525952
+read 4194304/4194304 bytes at offset 58720256
+read 4194304/4194304 bytes at offset 62914560
+read 4194304/4194304 bytes at offset 67108864
+read 4194304/4194304 bytes at offset 71303168
+read 4194304/4194304 bytes at offset 75497472
+read 4194304/4194304 bytes at offset 79691776
+read 4194304/4194304 bytes at offset 8388608
+read 4194304/4194304 bytes at offset 83886080
+read 4194304/4194304 bytes at offset 88080384
+read 4194304/4194304 bytes at offset 92274688
+read 4194304/4194304 bytes at offset 96468992
+965b1c8163a4c846f01a76d0a6b85959  -
+reconnection while qemu-img read
+reconnection while qemu-img write
+965b1c8163a4c846f01a76d0a6b85959  -
