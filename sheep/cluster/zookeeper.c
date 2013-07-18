@@ -72,14 +72,10 @@ static struct sd_node sd_nodes[SD_MAX_NODES];
 static size_t nr_sd_nodes;
 static struct rb_root zk_node_root = RB_ROOT;
 static pthread_rwlock_t zk_tree_lock = PTHREAD_RWLOCK_INITIALIZER;
-static pthread_rwlock_t zk_compete_master_lock = PTHREAD_RWLOCK_INITIALIZER;
 static LIST_HEAD(zk_block_list);
-static uatomic_bool is_master;
-static uatomic_bool stop;
+static bool first_member;
 static bool joined;
 static bool first_push = true;
-
-static void zk_compete_master(void);
 
 static struct zk_node *zk_tree_insert(struct zk_node *new)
 {
@@ -563,12 +559,6 @@ static void zk_watcher(zhandle_t *zh, int type, int state, const char *path,
 	} else if (type == ZOO_DELETED_EVENT) {
 		struct zk_node *n;
 
-		ret = sscanf(path, MASTER_ZNONE "/%s", str);
-		if (ret == 1) {
-			zk_compete_master();
-			return;
-		}
-
 		ret = sscanf(path, MEMBER_ZNODE "/%s", str);
 		if (ret != 1)
 			return;
@@ -720,27 +710,16 @@ static int zk_verify_last_sheep_join(int seq, int *last_sheep)
  * Create sequential node under MASTER_ZNODE.
  * Sheep with least sequential number win the competition.
  */
-static void zk_compete_master(void)
+static bool zk_compete_master(void)
 {
 	int rc, last_joined_sheep;
 	char master_name[MAX_NODE_STR_LEN];
 	char my_compete_path[MAX_NODE_STR_LEN];
 	static int master_seq = -1, my_seq;
 
-	/*
-	 * This is to protect master_seq and my_seq because this function will
-	 * be called by both main thread and zookeeper's event thread.
-	 */
-	pthread_rwlock_wrlock(&zk_compete_master_lock);
-
-	if (uatomic_is_true(&is_master) || uatomic_is_true(&stop))
-		goto out_unlock;
-
 	if (!joined) {
 		sd_dprintf("start to compete master for the first time");
 		do {
-			if (uatomic_is_true(&stop))
-				goto out_unlock;
 			/* duplicate sequential node has no side-effect */
 			rc = zk_create_seq_node(MASTER_ZNONE "/",
 						node_to_str(&this_node.node),
@@ -750,7 +729,7 @@ static void zk_compete_master(void)
 		} while (rc == ZOPERATIONTIMEOUT || rc == ZCONNECTIONLOSS);
 		CHECK_ZK_RC(rc, MASTER_ZNONE "/");
 		if (rc != ZOK)
-			goto out_unlock;
+			return false;
 
 		sd_dprintf("my compete path: %s", my_compete_path);
 		sscanf(my_compete_path, MASTER_ZNONE "/%"PRId32,
@@ -758,17 +737,17 @@ static void zk_compete_master(void)
 	}
 
 	if (zk_find_master(&master_seq, master_name) != ZOK)
-		goto out_unlock;
+		return false;
 
 	if (!strcmp(master_name, node_to_str(&this_node.node)))
 		goto success;
 	else if (joined) {
 		sd_dprintf("lost");
-		goto out_unlock;
+		return false;
 	} else {
 		if (zk_verify_last_sheep_join(my_seq,
 					      &last_joined_sheep) != ZOK)
-			goto out_unlock;
+			return false;
 
 		if (last_joined_sheep < 0) {
 			/* all previous sheep has quit, i'm master */
@@ -776,14 +755,20 @@ static void zk_compete_master(void)
 			goto success;
 		} else {
 			sd_dprintf("lost");
-			goto out_unlock;
+			return false;
 		}
 	}
 success:
-	uatomic_set_true(&is_master);
 	sd_dprintf("success");
-out_unlock:
-	pthread_rwlock_unlock(&zk_compete_master_lock);
+	return true;
+}
+
+static int zk_member_empty(void)
+{
+	struct String_vector strs;
+
+	zk_get_children(MEMBER_ZNODE, &strs);
+	return (strs.count == 0);
 }
 
 static int zk_join(const struct sd_node *myself,
@@ -801,7 +786,9 @@ static int zk_join(const struct sd_node *myself,
 		exit(1);
 	}
 
-	zk_compete_master();
+	if (zk_member_empty() && zk_compete_master())
+		first_member = true;
+
 	RETURN_IF_ERROR(add_join_event(opaque, opaque_len), "");
 
 	return ZOK;
@@ -812,7 +799,6 @@ static int zk_leave(void)
 	char path[PATH_MAX];
 
 	sd_iprintf("leaving from cluster");
-	uatomic_set_true(&stop);
 
 	snprintf(path, sizeof(path), MEMBER_ZNODE"/%s",
 		 node_to_str(&this_node.node));
@@ -839,16 +825,24 @@ static int zk_unblock(void *msg, size_t msg_len)
 static void zk_handle_join(struct zk_event *ev)
 {
 	sd_dprintf("sender: %s", node_to_str(&ev->sender.node));
-	if (!uatomic_is_true(&is_master)) {
-		/* Let's await master acking the join-request */
+	if (!first_member && node_eq(&ev->sender.node, &this_node.node)) {
+		/*
+		 * This node doesn't have sd_nodes yet.  Let's await another
+		 * acking the join-request.
+		 *
+		 * TODO: If the first member can have a valid sd_node, the node
+		 * can call sd_accept_handler and we can remove a master from
+		 * this driver.
+		 */
 		queue_pos--;
 		return;
 	}
 
-	sd_join_handler(&ev->sender.node, sd_nodes, nr_sd_nodes, ev->buf);
-	push_join_response(ev);
-
-	sd_dprintf("I'm the master now");
+	if (sd_join_handler(&ev->sender.node, sd_nodes, nr_sd_nodes, ev->buf))
+		push_join_response(ev);
+	else
+		/* Let's await another acking the join-request */
+		queue_pos--;
 }
 
 static void watch_all_nodes(void)
@@ -1061,6 +1055,7 @@ static void zk_event_handler(int listen_fd, int events, void *data)
 		sd_eprintf("detect a session timeout. reconnecting...");
 		handle_session_expire();
 		sd_iprintf("reconnected");
+		first_member = false;
 		eventfd_write(efd, 1);
 		return;
 	}
@@ -1121,8 +1116,6 @@ static int zk_init(const char *option)
 		return -1;
 	}
 
-	uatomic_set_false(&stop);
-	uatomic_set_false(&is_master);
 	if (zk_queue_init() != ZOK)
 		return -1;
 

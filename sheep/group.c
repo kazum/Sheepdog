@@ -779,13 +779,21 @@ void sd_notify_handler(const struct sd_node *sender, void *data,
  * Accept the joining node and pass the cluster info to it.
  *
  * Note that 'nodes' doesn't contain 'joining'.
+ *
+ * Return true if the joining node is accepted.  At least one nodes in the
+ * cluster must call this function and succeed in accept of the joining node.
  */
-void sd_join_handler(const struct sd_node *joining,
+bool sd_join_handler(const struct sd_node *joining,
 		     const struct sd_node *nodes, size_t nr_nodes,
 		     void *opaque)
 {
 	struct join_message *jm = opaque;
 	char str[MAX_NODE_STR_LEN];
+
+	if (nr_nodes > 0 && node_is_local(joining)) {
+		sd_dprintf("wait for another node to accept this node");
+		return false;
+	}
 
 	sd_dprintf("check %s, %d", node_to_str(joining), sys->status);
 
@@ -802,6 +810,8 @@ void sd_join_handler(const struct sd_node *joining,
 			       joining->nid.port), jm->cluster_status);
 
 	jm->cinfo = sys->cinfo;
+
+	return true;
 }
 
 static int send_join_request(struct sd_node *ent)
