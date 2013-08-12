@@ -1,0 +1,22 @@
+#!/bin/bash
+
+cd $(readlink -f $(dirname $0))
+
+for cluster in "" "-corosync" "-zk"; do
+    for md in "" "-md"; do
+	for cache_mode in "" "-writethrough" "-direct"; do
+	    for journal in "" "-j size=64"; do
+		for obj_cache in "" "-w size=64"; do
+		    echo cluster: $cluster
+		    echo md: $md
+		    echo cache_mode: $cache_mode
+		    echo journal: $journal
+		    echo obj_cache: $obj_cache
+
+		    SHEEP_EXTRA_OPTIONS="$journal $obj_cache" \
+			./check $cluster $md $cache_mode "$@"
+		done
+	    done
+	done
+    done
+done
