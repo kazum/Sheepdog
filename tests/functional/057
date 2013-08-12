@@ -4,7 +4,7 @@
 
 . ./common
 
-MD=true
+_requirement md
 
 if [ "$STORE" != "/tmp/sheepdog/057" ]; then
 	_notrun "This test cannot be run when WD is manually set"

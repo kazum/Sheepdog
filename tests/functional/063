@@ -3,7 +3,7 @@
 # Test reweight
 . ./common
 
-_requirement root
+_requirement root not_md
 
 _make_device 0 $((100 * 1024 ** 2))
 _make_device 1 $((100 * 1024 ** 2))

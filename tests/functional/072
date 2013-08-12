@@ -4,7 +4,7 @@
 
 . ./common
 
-MD=false
+_requirement not_md
 
 for i in 0 1; do
     _start_sheep $i

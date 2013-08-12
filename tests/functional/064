@@ -3,7 +3,7 @@
 # Test node failure while reweighting
 . ./common
 
-_requirement root
+_requirement root not_md
 
 _make_device 0 $((200 * 1024 ** 2)) # 200 MB
 _make_device 1 $((200 * 1024 ** 2)) # 200 MB

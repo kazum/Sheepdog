@@ -36,6 +36,11 @@ _check_root()
     [ "$id" -eq 0 ]
 }
 
+_check_md()
+{
+    $MD
+}
+
 _requirement()
 {
     local arg

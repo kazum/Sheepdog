@@ -4,6 +4,8 @@
 
 . ./common
 
+_requirement not_md
+
 for i in 0 1 2; do
     _start_sheep $i
 done
