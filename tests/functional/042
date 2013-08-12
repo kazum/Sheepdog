@@ -4,7 +4,7 @@
 
 . ./common
 
-_need_to_be_root
+_requirement root
 
 _make_device 0 $((1024 ** 3))
 _make_device 1 $((1024 ** 3))

@@ -30,15 +30,40 @@ fi
 # make sure we have a standard umask
 umask 022
 
-# check if run as root
-#
-_need_to_be_root()
+_check_root()
 {
     local id=`id | $SED_PROG -e 's/(.*//' -e 's/.*=//'`
-    if [ "$id" -ne 0 ]
-    then
-	_notrun "you need to be root (not uid=$id) to run this test"
-    fi
+    [ "$id" -eq 0 ]
+}
+
+_requirement()
+{
+    local arg
+    local required
+    local feature
+
+    for arg in $*; do
+	if [ $(echo $arg | cut -c 1-4) = "not_" ]; then
+	    required=false
+	    feature=$(echo $arg | cut -c 5-)
+	else
+	    required=true
+	    feature=$arg
+	fi
+
+	local check=_check_$feature
+
+	type $check 1>/dev/null 2>/dev/null
+	if [ $? != 0 ]; then
+	    _die $check is not defined
+	fi
+
+	if $check && ! $required; then
+	    _notrun "cannot run this test with $feature"
+	elif ! $check && $required; then
+	    _notrun "$feature is required to run this test"
+	fi
+    done
 }
 
 # To remove directory successfully always, we have to rename it first

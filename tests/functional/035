@@ -12,7 +12,7 @@ _uninit()
 	done
 }
 
-_need_to_be_root
+_requirement root
 
 for i in `seq 0 5`; do
 	_start_sheep $i
